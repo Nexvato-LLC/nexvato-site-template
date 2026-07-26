@@ -1,0 +1,28 @@
+# Amplify build spec.
+#
+# ⚠️ Amplify only exposes env vars to the build if they are written into a
+# .env file during preBuild — setting them on the app alone is NOT enough for
+# Next.js to inline NEXT_PUBLIC_* values at build time. Every var the site
+# needs must appear in the echo block below.
+#
+# A missing var here does not fail the build. It produces a site that deploys
+# green and renders an unconnected store, which is far worse.
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+        - env | grep -E '^NEXT_PUBLIC_' >> .env.production || echo "no NEXT_PUBLIC_ vars found"
+        - echo "--- build will use ---" && cat .env.production || true
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+      - .next/cache/**/*
