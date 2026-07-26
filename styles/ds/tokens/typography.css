@@ -1,0 +1,73 @@
+/* ==========================================================================
+   Nexvato Site Template — Typography Tokens
+   Anton (display), Oswald (condensed headings/labels), Barlow (body/UI).
+   ========================================================================== */
+
+:root {
+  /* ---- Families ------------------------------------------------------ */
+  --font-display: 'Anton', 'Oswald', 'Arial Narrow', sans-serif;   /* heavy condensed caps */
+  --font-heading: 'Oswald', 'Barlow Condensed', sans-serif;        /* condensed grotesque */
+  --font-body:    'Barlow', 'Segoe UI', system-ui, sans-serif;     /* humanist sans */
+
+  /* ---- Type scale (16px base) --------------------------------------- */
+  --text-2xs:  11px;
+  --text-xs:   12px;
+  --text-sm:   14px;
+  --text-base: 16px;
+  --text-md:   18px;
+  --text-lg:   20px;
+  --text-xl:   24px;
+  --text-2xl:  30px;
+  --text-3xl:  38px;
+  --text-4xl:  48px;
+  --text-5xl:  64px;
+  --text-6xl:  84px;   /* hero display */
+
+  /* ---- Weights ------------------------------------------------------- */
+  --fw-regular:  400;  /* @kind font */
+  --fw-medium:   500;  /* @kind font */
+  --fw-semibold: 600;  /* @kind font */
+  --fw-bold:     700;  /* @kind font */
+  /* Numeric aliases — the semantic roles below reference these; without them the
+     `font:` shorthand on --type-h2/-h3/-eyebrow/-product/-button was invalid and dropped. */
+  --fw-400: 400;  /* @kind font */
+  --fw-500: 500;  /* @kind font */
+  --fw-600: 600;  /* @kind font */
+  --fw-700: 700;  /* @kind font */
+
+  /* ---- Line heights -------------------------------------------------- */
+  --lh-tight:   0.98;  /* @kind font */ /* stacked display headlines */
+  --lh-snug:    1.12;  /* @kind font */
+  --lh-normal:  1.5;   /* @kind font */
+  --lh-relaxed: 1.65;  /* @kind font */
+
+  /* ---- Letter spacing ----------------------------------------------- */
+  --ls-display: 0.005em; /* @kind font */
+  --ls-tight:  -0.01em;  /* @kind font */
+  --ls-normal:  0;       /* @kind font */
+  --ls-wide:    0.06em;  /* @kind font */ /* eyebrows / small caps labels */
+  --ls-wider:   0.14em;  /* @kind font */ /* nav, tiny all-caps */
+
+  /* ---- Semantic roles ------------------------------------------------ */
+  /* Display — hero, big statements. ALWAYS uppercase in use. */
+  --type-display:      var(--fw-regular) var(--text-6xl)/var(--lh-tight) var(--font-display);
+  --type-display-sm:   var(--fw-regular) var(--text-4xl)/var(--lh-tight) var(--font-display);
+
+  /* Headings */
+  --type-h1: var(--fw-regular) var(--text-4xl)/var(--lh-snug) var(--font-display);
+  --type-h2: var(--fw-700)     var(--text-3xl)/var(--lh-snug) var(--font-heading);
+  --type-h3: var(--fw-600)     var(--text-xl)/var(--lh-snug)  var(--font-heading);
+
+  /* Eyebrow — small caps label above headings */
+  --type-eyebrow: var(--fw-600) var(--text-sm)/1.2 var(--font-heading);
+
+  /* Body */
+  --type-body:       var(--fw-regular) var(--text-base)/var(--lh-relaxed) var(--font-body);
+  --type-body-sm:    var(--fw-regular) var(--text-sm)/var(--lh-normal)   var(--font-body);
+
+  /* Product title */
+  --type-product: var(--fw-700) var(--text-md)/1.35 var(--font-body);
+
+  /* Button / label — uppercase condensed */
+  --type-button: var(--fw-600) var(--text-sm)/1 var(--font-heading);
+}

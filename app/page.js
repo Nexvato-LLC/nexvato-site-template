@@ -1,83 +1,169 @@
-import { getProducts, formatPrice, SHOP_ID, SHOP_API } from "../lib/shop";
+'use client';
 
-// Server component: the catalog is fetched during the build/render on the
-// server, so the shop id never has to round-trip through the browser and the
-// page is indexable with real product content in the HTML.
-export default async function Home() {
-  let products = [];
-  let error = null;
-  try {
-    products = await getProducts();
-  } catch (e) {
-    error = e.message;
-  }
+import { useRouter } from 'next/navigation';
+import { useCart } from '@/components/CartProvider';
+import { useSiteContent } from '@/components/ContentProvider';
+import useStorefrontMotion from '@/lib/useStorefrontMotion';
+import Eyebrow from '@/components/ds/Eyebrow';
+import Button from '@/components/ds/Button';
+import SectionHeading from '@/components/ds/SectionHeading';
+import ProductCard from '@/components/ds/ProductCard';
+import PromoCard from '@/components/ds/PromoCard';
+import BrandRoster from '@/components/sections/BrandRoster';
+import Input from '@/components/ds/Input';
+import dynamic from 'next/dynamic';
+
+const HeroBackdrop = dynamic(() => import('@/components/HeroBackdrop'), { ssr: false });
+
+/** Render a headline, highlighting the accent word(s) in gold. */
+function Headline({ text, accent }) {
+  if (!accent) return <>{text}</>;
+  const parts = String(text).split(new RegExp(`(${accent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'));
+  return parts.map((p, i) =>
+    p.toLowerCase() === accent.toLowerCase()
+      ? <span key={i} style={{ color: 'var(--gold-400)' }}>{p}</span>
+      : <span key={i}>{p}</span>
+  );
+}
+
+export default function Home() {
+  useStorefrontMotion();
+  const router = useRouter();
+  const { catalog, add } = useCart();
+  const { home, promos } = useSiteContent();
+
+  // Curated via Medusa collections, with graceful fallbacks.
+  const featured = (() => {
+    const c = catalog.filter((p) => p.collection === 'featured');
+    return c.length ? c : catalog.filter((p) => !p.collectible).slice(0, 4);
+  })();
+  const collectibles = (() => {
+    const c = catalog.filter((p) => p.collection === 'collectibles');
+    return c.length ? c : catalog.filter((p) => p.collectible);
+  })();
+
+  const goShop = () => router.push('/shop');
+  const openProduct = (id) => router.push('/product/' + id);
+  const handleCta = (url) => {
+    if (!url) return;
+    if (url.startsWith('#')) document.querySelector(url)?.scrollIntoView({ behavior: 'smooth' });
+    else if (url.startsWith('/')) router.push(url);
+    else window.location.href = url;
+  };
 
   return (
-    <main style={{ maxWidth: 960, margin: "0 auto", padding: "48px 24px" }}>
-      <header style={{ marginBottom: 40 }}>
-        <h1 style={{ fontSize: 34, margin: 0 }}>Your Store</h1>
-        <p style={{ color: "#94a3b8", marginTop: 8 }}>
-          This site is connected to your Nexvato store. Products, pricing and
-          stock are managed from your dashboard — no code changes needed.
-        </p>
-      </header>
-
-      {/* Provisioning check. If the platform wired this repo correctly the
-          banner below is green; if an env var is missing it says exactly
-          which one, instead of silently rendering an empty shop. */}
-      <section
-        style={{
-          border: `1px solid ${error ? "#7f1d1d" : "#14532d"}`,
-          background: error ? "#450a0a" : "#052e16",
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 32,
-          fontSize: 14,
-        }}
-      >
-        <strong>{error ? "Not connected" : "Connected"}</strong>
-        <div style={{ color: "#94a3b8", marginTop: 6, fontFamily: "ui-monospace, monospace" }}>
-          <div>NEXT_PUBLIC_SHOP_ID: {SHOP_ID || "(missing)"}</div>
-          <div>NEXT_PUBLIC_SHOP_API_URL: {SHOP_API}</div>
+    <div data-screen-label="Home">
+      {/* HERO — full-bleed cinematic waving flag */}
+      <section data-band style={{ position: 'relative', overflow: 'hidden', minHeight: 'clamp(560px,78vh,760px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '96px 0', background: '#00052e' }}>
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundColor: '#00052e', backgroundImage: 'repeating-linear-gradient(to bottom, rgba(193,39,45,0.30) 0 7.69%, rgba(255,255,255,0.05) 7.69% 15.38%)' }} />
+        <HeroBackdrop />
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'radial-gradient(100% 82% at 50% 50%, rgba(0,5,46,0.72) 0%, rgba(0,5,46,0.45) 45%, rgba(0,5,46,0.22) 100%)' }} />
+        <div style={{ position: 'relative', zIndex: 3, width: '100%', maxWidth: 760, margin: '0 auto', padding: '0 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 22 }}>
+          <div data-rise><Eyebrow color="onDark" rule>{home.hero_eyebrow}</Eyebrow></div>
+          <h1 data-split style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(54px,7vw,88px)', lineHeight: 0.96, letterSpacing: '0.01em', textTransform: 'uppercase', color: 'var(--white)', textShadow: '0 2px 28px rgba(0,0,0,0.5)' }}>
+            <Headline text={home.hero_headline} accent={home.hero_accent} />
+          </h1>
+          <p data-rise style={{ margin: 0, maxWidth: 520, fontSize: 17, lineHeight: 1.7, color: 'var(--text-on-dark-muted)' }}>{home.hero_subcopy}</p>
+          <div data-rise style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
+            <Button variant="primary" size="lg" arrow onClick={() => handleCta(home.hero_cta_primary_url)}>{home.hero_cta_primary_label}</Button>
+            <Button variant="outline" size="lg" onClick={() => handleCta(home.hero_cta_secondary_url)} style={{ color: 'var(--white)', border: '1px solid rgba(255,255,255,0.55)', background: 'transparent' }}>{home.hero_cta_secondary_label}</Button>
+          </div>
+          <div data-rise style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 18, marginTop: 8, fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.62)' }}>
+            {(home.hero_trust || []).map((t, i) => (
+              <span key={i} style={{ display: 'inline-flex', gap: 18 }}>{i > 0 && <span aria-hidden="true">·</span>}<span>{t}</span></span>
+            ))}
+          </div>
         </div>
-        {error && <div style={{ marginTop: 8, color: "#fca5a5" }}>{error}</div>}
       </section>
 
-      {products.length === 0 && !error && (
-        <p style={{ color: "#94a3b8" }}>
-          No products yet — add your first one from the dashboard.
-        </p>
+      {/* FEATURED GEAR */}
+      <section data-band style={{ background: 'var(--white)', padding: '80px 0 0' }}>
+        <div style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px' }}>
+          <div data-rise><SectionHeading eyebrow={home.featured?.eyebrow} title={home.featured?.title} subtitle={home.featured?.subtitle} /></div>
+          <div data-grid style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(250px,1fr))', gap: 20, marginTop: 32 }}>
+            {featured.map((p) => (
+              <ProductCard key={p.id} brand={p.brand} title={p.title} image={p.image} price={p.price} compareAt={p.compareAt} badge={p.badge} badgeVariant={p.badgeVariant} onClick={() => openProduct(p.id)} onQuickAdd={() => add(p.id, 1)} />
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 36 }}>
+            <Button variant="navy" arrow onClick={goShop}>See All Collection</Button>
+          </div>
+        </div>
+      </section>
+
+      {/* COLLECTIBLES SPOTLIGHT */}
+      <section data-band style={{ background: 'var(--white)', padding: '80px 0' }}>
+        <div style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px' }}>
+          <div data-rise><SectionHeading eyebrow={home.collectibles?.eyebrow} title={home.collectibles?.title} subtitle={home.collectibles?.subtitle} /></div>
+          <div data-grid style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 20, marginTop: 32 }}>
+            {collectibles.map((p) => (
+              <ProductCard key={p.id} brand={p.brand} title={p.title} image={p.image} price={p.price} compareAt={p.compareAt} badge={p.badge} badgeVariant={p.badgeVariant} onClick={() => openProduct(p.id)} onQuickAdd={() => add(p.id, 1)} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SHOP BY BRANDS — "The Roster" (reads its heading from content) */}
+      <BrandRoster />
+
+      {/* PROMO TILES — managed + scheduled */}
+      {promos.length > 0 && (
+        <section data-band data-parallax-zone style={{ background: 'var(--white)', padding: '80px 0 0' }}>
+          <div style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(340px,100%),1fr))', gap: 20 }}>
+            {promos.map((c, i) => (
+              <div data-parallax-img key={i}>
+                <PromoCard eyebrow={c.eyebrow} title={c.title} image={c.image_url} overlay={c.overlay || 'navy'} align={c.align || 'left'} height={230} onClick={(e) => { e.preventDefault(); handleCta(c.link_url); }} />
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-          gap: 20,
-        }}
-      >
-        {products.map((p) => {
-          const price = p.variants?.[0]?.priceCents ?? 0;
-          return (
-            <article
-              key={p.id}
-              style={{
-                border: "1px solid #1e293b",
-                borderRadius: 12,
-                padding: 16,
-                background: "#0f172a",
-              }}
-            >
-              <h2 style={{ fontSize: 16, margin: "0 0 8px" }}>{p.name}</h2>
-              <div style={{ color: "#a5b4fc", fontWeight: 600 }}>{formatPrice(price)}</div>
-            </article>
-          );
-        })}
-      </div>
+      {/* FOLDS OF HONOR CAUSE BAND */}
+      <section id="cause-band" data-band style={{ position: 'relative', background: 'var(--navy-700)', marginTop: 80, overflow: 'hidden' }}>
+        <canvas data-fx="stars" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, transition: 'opacity 1.2s ease-out', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative', maxWidth: 'var(--container)', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(360px,100%),1fr))', gap: 48, alignItems: 'center', padding: '80px 24px' }}>
+          <div data-rise style={{ position: 'relative', minHeight: 340, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ position: 'absolute', top: 16, left: 28, width: 56, height: 56, borderRadius: '50%', background: 'var(--brand-royal)' }} />
+            <span style={{ position: 'absolute', bottom: 28, right: 40, width: 26, height: 26, borderRadius: '50%', background: 'var(--brand-red)' }} />
+            <div style={{ width: 'min(310px,80%)', aspectRatio: '1', borderRadius: '50%', overflow: 'hidden', border: '6px solid var(--white)', boxShadow: 'var(--shadow-lg)' }}>
+              <img src={home.cause_image_url} alt={home.cause_title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div data-rise><Eyebrow color="onDark">{home.cause_eyebrow}</Eyebrow></div>
+            <h2 data-split style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(38px,4.4vw,54px)', lineHeight: 0.98, textTransform: 'uppercase', color: 'var(--white)' }}>{home.cause_title}</h2>
+            <p data-rise style={{ margin: 0, maxWidth: 480, fontSize: 16, lineHeight: 1.7, color: 'var(--text-on-dark-muted)' }}>{home.cause_body}</p>
+            <div data-rise style={{ display: 'flex', gap: 40, flexWrap: 'wrap', marginTop: 10 }}>
+              {(home.cause_stats || []).map((s, i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span data-count={s.value} style={{ fontFamily: 'var(--font-display)', fontSize: 44, lineHeight: 1, color: 'var(--gold-400)' }}>0</span>
+                  <span style={{ fontFamily: 'var(--font-heading)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-on-dark-muted)' }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
+            <div data-rise style={{ marginTop: 6 }}>
+              <a href={home.cause_cta_url || '/shop'} onClick={(e) => { e.preventDefault(); handleCta(home.cause_cta_url); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--gold-400)', textDecoration: 'none', borderBottom: '1px solid var(--gold-600)', paddingBottom: 4 }}>
+                {home.cause_cta_label}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <footer style={{ marginTop: 56, color: "#475569", fontSize: 13 }}>
-        Edit this site by pushing to its repository — every push deploys.
-      </footer>
-    </main>
+      {/* NEWSLETTER */}
+      <section data-band style={{ background: 'var(--cream-100)' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '72px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
+          <div data-rise><Eyebrow color="royal">{home.newsletter_eyebrow}</Eyebrow></div>
+          <h2 data-split style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,4vw,46px)', lineHeight: 0.98, textTransform: 'uppercase', color: 'var(--ink)' }}>{home.newsletter_title}</h2>
+          <p data-rise style={{ margin: 0, maxWidth: 440, fontSize: 15, lineHeight: 1.7, color: 'var(--text-body)' }}>{home.newsletter_subcopy}</p>
+          <div data-rise style={{ display: 'flex', gap: 10, width: 'min(440px,100%)', marginTop: 6 }}>
+            <div style={{ flex: '1 1 auto' }}><Input type="email" placeholder="Email address" size="md" /></div>
+            <Button variant="navy" arrow>{home.newsletter_button_label}</Button>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }

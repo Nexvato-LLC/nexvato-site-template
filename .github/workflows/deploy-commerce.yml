@@ -1,0 +1,113 @@
+# Push-to-deploy for the Medusa commerce backend.
+#
+# Same shape as nexvato-dashboard's deploy-api.yml: quality gates first, then
+# ship. A red gate means NO deploy. Mirrors what Amplify does for the
+# storefront — push to main, the change goes live, no manual steps.
+#
+# Only fires when commerce code changes, so storefront-only commits don't
+# rebuild the backend.
+#
+# Required repo secrets:
+#   FLEET_SSH_KEY  — private key for ubuntu@ the fleet host
+#   FLEET_HOST     — the fleet host's IP / DNS name
+name: Deploy commerce backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'medusa/**'
+      - '.github/workflows/deploy-commerce.yml'
+  workflow_dispatch:
+
+concurrency:
+  # Never let two deploys race on the same box.
+  group: deploy-commerce
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Gates: a broken build must never reach the box ─────────────────────
+      - name: Install
+        working-directory: medusa
+        run: npm ci --workspaces --include-workspace-root
+
+      - name: Typecheck
+        working-directory: medusa/apps/backend
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: medusa/apps/backend
+        run: npm run build
+
+      # ── Ship ───────────────────────────────────────────────────────────────
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.FLEET_SSH_KEY }}" > ~/.ssh/fleet.pem
+          chmod 600 ~/.ssh/fleet.pem
+          ssh-keyscan -H "${{ secrets.FLEET_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync source to the fleet host
+        run: |
+          rsync -az --delete \
+            --exclude node_modules --exclude .git --exclude '.env' \
+            --exclude '.medusa' --exclude dist \
+            medusa/ ubuntu@${{ secrets.FLEET_HOST }}:/opt/nexvato/clients/jays/ \
+            -e "ssh -i ~/.ssh/fleet.pem -o StrictHostKeyChecking=no"
+
+      # Migrations run HERE, not in the container. Two hard-won reasons
+      # (both hit on 2026-07-25):
+      #   1. `medusa db:migrate` inside the built container hangs acquiring a
+      #      DB connection and dies on Medusa's 10s verify timeout, even though
+      #      the same DB is reachable and the server itself runs fine.
+      #   2. Migrations SYNC THE PROVIDER REGISTRY (payment/notification) into
+      #      the database. Running them without the same env the server uses
+      #      leaves providers rows `is_enabled = false`, and order emails fail
+      #      with "Could not find a notification provider for channel: email".
+      #      So the migrate step gets the FULL runtime env, not a subset.
+      - name: Run migrations (tunnelled to the box's Postgres)
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
+          AWS_REGION: us-east-1
+        run: |
+          ssh -f -N -L 15433:127.0.0.1:5433 -i ~/.ssh/fleet.pem \
+            -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
+            ubuntu@${{ secrets.FLEET_HOST }}
+          PW=$(ssh -i ~/.ssh/fleet.pem -o StrictHostKeyChecking=no \
+            ubuntu@${{ secrets.FLEET_HOST }} \
+            "grep '^POSTGRES_PASSWORD=' /opt/nexvato/clients/jays/.env | cut -d= -f2")
+          cd medusa/apps/backend
+          DATABASE_URL="postgres://medusa:${PW}@127.0.0.1:15433/jays_medusa" \
+            npx medusa db:migrate
+
+      - name: Rebuild + restart the container
+        run: |
+          ssh -i ~/.ssh/fleet.pem -o StrictHostKeyChecking=no \
+            ubuntu@${{ secrets.FLEET_HOST }} <<'REMOTE'
+          set -e
+          cd /opt/nexvato/clients/jays
+          sudo docker compose build backend
+          # Restart AFTER migrations: the provider registry is read at boot, so
+          # a provider enabled by the migration step is only picked up here.
+          sudo docker compose up -d --force-recreate backend
+          REMOTE
+
+      - name: Verify it actually serves
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://jays.store.nexvato.com/health || true)
+            if [ "$code" = "200" ]; then echo "healthy ✓"; exit 0; fi
+            echo "attempt $i: got $code"; sleep 5
+          done
+          echo "health check FAILED — the deploy did not come up"
+          exit 1

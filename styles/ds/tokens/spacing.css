@@ -1,0 +1,55 @@
+/* ==========================================================================
+   Nexvato Site Template — Spacing, Radius, Shadow, Layout, Motion
+   ========================================================================== */
+
+:root {
+  /* ---- Spacing (4px base grid) -------------------------------------- */
+  --space-0:   0;
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+  --space-20:  80px;
+  --space-24:  96px;
+  --section-y: 80px;   /* vertical rhythm between page bands */
+
+  /* ---- Radius — sharp, athletic/vintage. Small by default ----------- */
+  --radius-xs:   2px;
+  --radius-sm:   3px;
+  --radius-md:   4px;   /* default UI radius (buttons, chips, inputs) */
+  --radius-lg:   6px;
+  --radius-xl:   10px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  /* ---- Borders ------------------------------------------------------ */
+  --border-width: 1px;         /* @kind spacing */
+  --border-width-thick: 2px;   /* @kind spacing */
+
+  /* ---- Shadows — subtle, retail. Soft ambient lift ------------------ */
+  --shadow-xs: 0 1px 2px rgba(16,35,61,0.06);
+  --shadow-sm: 0 1px 3px rgba(16,35,61,0.10), 0 1px 2px rgba(16,35,61,0.06);
+  --shadow-md: 0 6px 16px rgba(16,35,61,0.10);
+  --shadow-lg: 0 14px 34px rgba(16,35,61,0.14);
+  --shadow-btn: 0 2px 6px rgba(165,31,36,0.28);   /* red CTA lift */
+  --shadow-card-hover: 0 12px 28px rgba(16,35,61,0.16);
+
+  /* ---- Layout ------------------------------------------------------- */
+  --container:      1200px;
+  --container-wide: 1360px;
+  --container-narrow: 760px;
+  --gutter: 24px;
+
+  /* ---- Motion — quick, snappy, no bounce ---------------------------- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);   /* @kind other */
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);  /* @kind other */
+  --dur-fast:   120ms;  /* @kind other */
+  --dur-normal: 200ms;  /* @kind other */
+  --dur-slow:   360ms;  /* @kind other */
+}

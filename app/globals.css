@@ -1,0 +1,86 @@
+html, body { margin: 0; padding: 0; background: #ffffff; color: #16181d; font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif; }
+a { color: #2e3192; }
+a:hover { color: #24276f; }
+::selection { background: #dcdcf0; }
+* { box-sizing: border-box; }
+
+/* Unified, accessible focus ring — outline (not box-shadow) so it never clips
+   inside overflow:hidden cards. Mouse clicks don't trigger it; keyboard does. */
+:focus:not(:focus-visible) { outline: none; }
+:focus-visible { outline: 2px solid var(--brand-royal); outline-offset: 2px; border-radius: 2px; }
+
+/* Reduced-motion safety net for CSS-driven animation/transition. The JS layer
+   (SiteMotion/SiteFX) has its own reduced() path; this covers plain CSS. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- Cart drawer control hovers ---- */
+.site-qtybtn { transition: background var(--dur-fast) var(--ease-standard); }
+.site-qtybtn:hover { background: var(--gray-100); }
+.site-removebtn { transition: color var(--dur-fast), transform var(--dur-fast); }
+.site-removebtn:hover { color: var(--brand-red); transform: rotate(90deg); }
+
+/* ---- Flag-color route-transition wipe (RouteWipe) ---- */
+.route-wipe {
+  position: fixed; inset: 0; z-index: 9998; pointer-events: none;
+  transform: scaleX(0); opacity: 0;
+  background: linear-gradient(90deg, #c1272d 0 6px, #10233d 6px);
+}
+
+/* ---- Loading skeleton ---- */
+.site-skel { background: var(--gray-200); border-radius: var(--radius-md); animation: sitePulse 1.4s ease-in-out infinite; }
+@keyframes sitePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* ---- Brand Roster (home "Shop by Brands") — gold-foil wordmarks, sibling dim ---- */
+.roster:hover .roster-name { opacity: 0.35; }
+.roster .roster-cell:hover .roster-name { opacity: 1; }
+.roster-cell { transition: background var(--dur-fast) var(--ease-standard); }
+.roster-cell:hover { background: rgba(255, 255, 255, 0.03); }
+.roster-name {
+  color: var(--cream-100);
+  -webkit-text-fill-color: var(--cream-100);
+  background-image: linear-gradient(100deg, #e0b45e 0%, #f6e7c6 30%, #e0b45e 60%, #a97e34 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  background-size: 220% 100%;
+  background-position: 100% 0;
+  transition: opacity var(--dur-normal) var(--ease-out);
+}
+.roster-cell:hover .roster-name {
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  background-position: 0 0;
+  transition: background-position 0.7s var(--ease-out), opacity var(--dur-normal) var(--ease-out);
+}
+
+/* ---- Footer link hover ---- */
+.foot-link { transition: color var(--dur-fast) var(--ease-standard); }
+.foot-link:hover { color: var(--gold-400); }
+
+/* ---- ProductCard stretched-nav focus ring ---- */
+/* The card clips overflow, so the global outline+offset would be cut off; use
+   an inset ring on the full-bleed nav button instead. */
+.pc-nav:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--brand-royal); border-radius: var(--radius-md); }
+
+/* ---- Responsive ---- */
+/* PDP sticky add-to-cart bar is mobile-only — a full add-to-cart lives in the
+   desktop layout. */
+@media (min-width: 860px) {
+  .pdp-atc-bar { display: none !important; }
+}
+/* Compact the sticky header on small screens. */
+@media (max-width: 640px) {
+  #site-headbar { padding: 10px 16px !important; }
+  #site-logo { height: 46px !important; }
+}
+/* Shop filter rail: full-width and non-sticky below tablet so it stacks cleanly
+   above the product grid instead of leaving a dead column beside it. */
+@media (max-width: 900px) {
+  .shop-rail { position: static !important; flex-basis: 100% !important; top: auto !important; }
+}

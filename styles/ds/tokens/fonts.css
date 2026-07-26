@@ -1,0 +1,11 @@
+/* Nexvato Site Template — Webfonts
+   Brand type is a patriotic / athletic pairing:
+   - Anton  → heavy condensed display (hero headlines, section titles, ALL CAPS)
+   - Oswald → condensed grotesque (eyebrows, nav, buttons, labels)
+   - Barlow → humanist sans (body copy, product titles, prices, UI)
+   NOTE: the vintage slab lettering inside the LOGO badge is a proprietary
+   display face and is NOT reproduced here — the logo art is used as an image.
+   These three Google families approximate the reference site's type voice.
+   Substitution flagged in readme.md — swap for licensed brand fonts if desired. */
+
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');

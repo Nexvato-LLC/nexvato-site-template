@@ -1,3 +1,48 @@
-node_modules
-.next
-.env*.local
+# Dependencies
+node_modules/
+**/node_modules/
+.pnp
+.pnp.*
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+
+# Builds
+/build
+/dist
+**/dist/
+
+# Medusa build output / uploads
+**/.medusa/
+**/uploads/
+**/medusa-db.sql
+
+# Caches
+**/.turbo/
+.cache/
+coverage/
+
+# Env & secrets — NEVER commit real env (Neon DATABASE_URL, JWT/cookie secrets live here)
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# TypeScript
+*.tsbuildinfo
+db-backups/
