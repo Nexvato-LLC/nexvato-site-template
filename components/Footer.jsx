@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useSiteContent } from '@/components/ContentProvider';
 import { BRAND } from "@/lib/brand";
+import { HAS_COMMERCE, isCommerceUrl } from '@/lib/site-mode';
 
 const colLinkStyle = { fontSize: 14, color: 'var(--text-on-dark-muted)', textDecoration: 'none' };
 const headingStyle = { fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--gold-400)' };
@@ -15,7 +16,17 @@ function FootLink({ url, style, children }) {
 export default function Footer() {
   const { home } = useSiteContent();
   const f = home.footer || {};
-  const columns = f.columns || [];
+  // Drop links to routes that do not exist on a brochure site, then drop any
+  // column left empty. Done by URL rather than by column name so an editor
+  // cannot accidentally reintroduce a dead link by renaming a heading — the
+  // commerce routes 404 without a shop, and a footer full of 404s is a bad
+  // look and bad for SEO.
+  const columns = (f.columns || [])
+    .map((col) => ({
+      ...col,
+      links: (col.links || []).filter((l) => HAS_COMMERCE || !isCommerceUrl(l.url)),
+    }))
+    .filter((col) => col.links.length > 0);
   const legal = f.legal || [];
 
   return (

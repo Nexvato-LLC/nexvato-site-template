@@ -10,6 +10,7 @@ import AuthProvider from "@/components/AuthProvider";
 import ContentProvider from "@/components/ContentProvider";
 import { BRAND } from "@/lib/brand";
 import SetupNotice from "@/components/SetupNotice";
+import { HAS_COMMERCE } from "@/lib/site-mode";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
@@ -54,11 +55,18 @@ const ORG_JSONLD = {
       url: SITE_URL,
       name: BRAND.name,
       publisher: { "@id": `${SITE_URL}/#org` },
-      potentialAction: {
-        "@type": "SearchAction",
-        target: `${SITE_URL}/shop?q={search_term_string}`,
-        "query-input": "required name=search_term_string",
-      },
+      // Only advertise site search when there is a store to search. On a
+      // brochure site /shop is a 404, and telling search engines otherwise
+      // invites them to crawl a dead endpoint.
+      ...(HAS_COMMERCE
+        ? {
+            potentialAction: {
+              "@type": "SearchAction",
+              target: `${SITE_URL}/shop?q={search_term_string}`,
+              "query-input": "required name=search_term_string",
+            },
+          }
+        : {}),
     },
   ],
 };
@@ -83,7 +91,7 @@ export default function RootLayout({ children }) {
           <Header />
               <main>{children}</main>
               <Footer />
-              <CartDrawer />
+              {HAS_COMMERCE && <CartDrawer />}
             </AuthProvider>
           </CartProvider>
         </ContentProvider>

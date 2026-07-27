@@ -44,6 +44,29 @@ failure shipped once and cost a day to find.
 
 ---
 
+## Two modes, one repo
+
+A site is a **website** until a shop is connected, then it becomes a **store**.
+Nothing in this repo changes — the switch is the presence of
+`NEXT_PUBLIC_SHOP_ID`, which the platform injects when a shop is provisioned.
+
+| | Website (no shop) | Store (shop connected) |
+|---|---|---|
+| Homepage | hero, services, about, promos, contact, newsletter | all of that **plus** product grids |
+| Header | Home / Services / About / Contact | Home / **Shop** / About, plus cart |
+| `/shop`, `/checkout`, `/account`, `/product` | **404** | live |
+| Cart drawer | not rendered | rendered |
+| Links into the store | rewritten to a safe anchor | followed |
+
+**Why commerce ships dormant rather than as a separate template:** by the time
+a client asks for a store, their site usually carries bespoke design work they
+paid for. Regenerating the repo would throw that away. Carrying a few unused
+routes is a very small price for making "add ecommerce" a one-click change with
+nothing to migrate.
+
+Anything content-driven — services, about, promos — shows on **both**. A store
+still has services to describe; a brochure site still runs promotions.
+
 ## What's in the box
 
 - Homepage with animated hero, featured products, promo cards, about band, newsletter

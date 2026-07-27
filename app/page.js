@@ -10,6 +10,9 @@ import SectionHeading from '@/components/ds/SectionHeading';
 import ProductCard from '@/components/ds/ProductCard';
 import PromoCard from '@/components/ds/PromoCard';
 import BrandRoster from '@/components/sections/BrandRoster';
+import Services from '@/components/sections/Services';
+import Contact from '@/components/sections/Contact';
+import { HAS_COMMERCE, resolveUrl } from '@/lib/site-mode';
 import Input from '@/components/ds/Input';
 import dynamic from 'next/dynamic';
 
@@ -65,8 +68,8 @@ export default function Home() {
           </h1>
           <p data-rise style={{ margin: 0, maxWidth: 520, fontSize: 17, lineHeight: 1.7, color: 'var(--text-on-dark-muted)' }}>{home.hero_subcopy}</p>
           <div data-rise style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
-            <Button variant="primary" size="lg" arrow onClick={() => handleCta(home.hero_cta_primary_url)}>{home.hero_cta_primary_label}</Button>
-            <Button variant="outline" size="lg" onClick={() => handleCta(home.hero_cta_secondary_url)} style={{ color: 'var(--white)', border: '1px solid rgba(255,255,255,0.55)', background: 'transparent' }}>{home.hero_cta_secondary_label}</Button>
+            <Button variant="primary" size="lg" arrow onClick={() => handleCta(resolveUrl(home.hero_cta_primary_url, '#services'))}>{home.hero_cta_primary_label}</Button>
+            <Button variant="outline" size="lg" onClick={() => handleCta(resolveUrl(home.hero_cta_secondary_url, '#about-band'))} style={{ color: 'var(--white)', border: '1px solid rgba(255,255,255,0.55)', background: 'transparent' }}>{home.hero_cta_secondary_label}</Button>
           </div>
           <div data-rise style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 18, marginTop: 8, fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.62)' }}>
             {(home.hero_trust || []).map((t, i) => (
@@ -76,7 +79,12 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FEATURED GEAR */}
+      {/* PRODUCT SECTIONS — only on a site with a shop connected.
+          A brochure site renders services and contact in their place; it must
+          never show an empty product grid or a "See All" button leading to a
+          store that does not exist. */}
+      {HAS_COMMERCE && (
+      <>
       <section data-band style={{ background: 'var(--white)', padding: '80px 0 0' }}>
         <div style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px' }}>
           <div data-rise><SectionHeading eyebrow={home.featured?.eyebrow} title={home.featured?.title} subtitle={home.featured?.subtitle} /></div>
@@ -103,8 +111,15 @@ export default function Home() {
         </div>
       </section>
 
-      {/* SHOP BY BRANDS — "The Roster" (reads its heading from content) */}
+      {/* SHOP BY BRANDS — hides itself when no brands are configured. */}
       <BrandRoster />
+      </>
+      )}
+
+      {/* BROCHURE SECTIONS — content-driven, shown on every site.
+          A store still has services to describe and a phone to answer, so
+          these are gated on their CONTENT existing, not on commerce. */}
+      <Services services={home.services} />
 
       {/* PROMO TILES — managed + scheduled */}
       {promos.length > 0 && (
@@ -112,7 +127,7 @@ export default function Home() {
           <div style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(340px,100%),1fr))', gap: 20 }}>
             {promos.map((c, i) => (
               <div data-parallax-img key={i}>
-                <PromoCard eyebrow={c.eyebrow} title={c.title} image={c.image_url} overlay={c.overlay || 'navy'} align={c.align || 'left'} height={230} onClick={(e) => { e.preventDefault(); handleCta(c.link_url); }} />
+                <PromoCard eyebrow={c.eyebrow} title={c.title} image={c.image_url} overlay={c.overlay || 'navy'} align={c.align || 'left'} height={230} onClick={(e) => { e.preventDefault(); handleCta(resolveUrl(c.link_url, '#contact')); }} />
               </div>
             ))}
           </div>
@@ -143,7 +158,7 @@ export default function Home() {
               ))}
             </div>
             <div data-rise style={{ marginTop: 6 }}>
-              <a href={home.cause_cta_url || '/shop'} onClick={(e) => { e.preventDefault(); handleCta(home.cause_cta_url); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--gold-400)', textDecoration: 'none', borderBottom: '1px solid var(--gold-600)', paddingBottom: 4 }}>
+              <a href={resolveUrl(home.cause_cta_url || '/shop', '#contact')} onClick={(e) => { e.preventDefault(); handleCta(resolveUrl(home.cause_cta_url, '#contact')); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--gold-400)', textDecoration: 'none', borderBottom: '1px solid var(--gold-600)', paddingBottom: 4 }}>
                 {home.cause_cta_label}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
               </a>
@@ -151,6 +166,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* CONTACT — every field optional; the whole band hides if none are set. */}
+      <Contact contact={home.contact} />
 
       {/* NEWSLETTER */}
       <section data-band style={{ background: 'var(--cream-100)' }}>

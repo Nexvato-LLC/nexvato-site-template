@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Input from '@/components/ds/Input';
 import IconButton from '@/components/ds/IconButton';
 import { useCart } from '@/components/CartProvider';
+import { HAS_COMMERCE } from '@/lib/site-mode';
 import { useAuth } from '@/components/AuthProvider';
 import { useSiteContent } from '@/components/ContentProvider';
 import { BRAND } from "@/lib/brand";
@@ -187,9 +188,12 @@ export default function Header() {
 
           <nav style={{ display: 'flex', gap: '12px 24px', flex: '1 1 auto', flexWrap: 'wrap', minWidth: 0 }}>
             <NavLink href="/" active={homeActive}>Home</NavLink>
-            <NavLink href="/shop" active={shopActive}>Shop</NavLink>
-            <NavLink href="/shop?cat=Collectibles" active={collectiblesActive}>Collectibles</NavLink>
-            <NavLink href="/#cause-band" active={false}>Our Cause</NavLink>
+            {/* Store links appear only once a shop is connected — a nav item
+                leading to a 404 is worse than one that is simply absent. */}
+            {HAS_COMMERCE && <NavLink href="/shop" active={shopActive}>Shop</NavLink>}
+            {!HAS_COMMERCE && <NavLink href="/#services" active={false}>Services</NavLink>}
+            <NavLink href="/#about-band" active={false}>About</NavLink>
+            {!HAS_COMMERCE && <NavLink href="/#contact" active={false}>Contact</NavLink>}
           </nav>
 
           <form
@@ -223,6 +227,8 @@ export default function Header() {
                 </svg>
               </IconButton>
             )}
+            {HAS_COMMERCE && (
+            <>
             <IconButton aria-label="Wishlist" variant="ghost">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 20s-7-4.4-9.2-9C1.3 8 2.8 5 6 5c2 0 3.2 1.2 4 2.4C10.8 6.2 12 5 14 5c3.2 0 4.7 3 3.2 6-2.2 4.6-9.2 9-9.2 9Z"></path>
@@ -241,6 +247,8 @@ export default function Header() {
                 <path d="M6 6 5.2 3H2.5"></path>
               </svg>
             </IconButton>
+            </>
+            )}
           </div>
         </div>
       </header>
