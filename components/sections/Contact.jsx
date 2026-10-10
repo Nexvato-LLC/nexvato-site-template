@@ -16,11 +16,14 @@ import Button from '@/components/ds/Button';
 export default function Contact({ contact }) {
   if (!contact) return null;
 
+  // Hours are display lines saved by the business (an array); a string from
+  // an older lib/content.js still works. Never defaulted (support #133).
+  const hours = (Array.isArray(contact.hours) ? contact.hours : [contact.hours]).filter(Boolean);
   const details = [
     contact.phone && { label: 'Phone', value: contact.phone, href: `tel:${contact.phone.replace(/[^\d+]/g, '')}` },
     contact.email && { label: 'Email', value: contact.email, href: `mailto:${contact.email}` },
     contact.address && { label: 'Address', value: contact.address, href: null },
-    contact.hours && { label: 'Hours', value: contact.hours, href: null },
+    hours.length > 0 && { label: 'Hours', value: hours.join('\n'), href: null },
   ].filter(Boolean);
 
   // Nothing to contact them by, and no action to take — show nothing.
@@ -92,7 +95,7 @@ export default function Contact({ contact }) {
                       {d.value}
                     </a>
                   ) : (
-                    <div style={{ color: 'var(--text-on-dark)', fontSize: 18 }}>{d.value}</div>
+                    <div style={{ color: 'var(--text-on-dark)', fontSize: 18, whiteSpace: 'pre-line' }}>{d.value}</div>
                   )}
                 </div>
               ))}

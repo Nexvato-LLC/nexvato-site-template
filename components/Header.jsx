@@ -9,7 +9,8 @@ import { useCart } from '@/components/CartProvider';
 import { HAS_COMMERCE } from '@/lib/site-mode';
 import { useAuth } from '@/components/AuthProvider';
 import { useSiteContent } from '@/components/ContentProvider';
-import { BRAND } from "@/lib/brand";
+import { useShopConfig } from '@/components/ShopConfigProvider';
+import { freeShippingOffer } from '@/lib/shipping';
 
 /* Ported from the source utility bar + <header id="site-header"> (SOURCE
    lines ~35-66) and the navItems built in renderVals() (lines ~699-712). */
@@ -65,8 +66,13 @@ export default function Header() {
   const router = useRouter();
   const { cartCount, openCart } = useCart();
   const { customer } = useAuth();
-  const { home } = useSiteContent();
+  const { home, brand, hasAbout, hasContact } = useSiteContent();
+  const { config } = useShopConfig();
   const [q, setQ] = useState('');
+  // Saved announcement + the store's real free-shipping offer (support
+  // #133/#138). Nothing invented: when both are blank the bar is not shown.
+  const announcement = home.announcement_left;
+  const shippingOffer = HAS_COMMERCE ? freeShippingOffer(config) : '';
 
   const headerRef = useRef(null);
   const barRef = useRef(null);
@@ -124,6 +130,7 @@ export default function Header() {
   return (
     <>
       {/* Utility bar */}
+      {(announcement || shippingOffer) && (
       <div style={{ background: 'var(--navy-800)', color: 'var(--text-on-dark-muted)' }}>
         <div
           style={{
@@ -142,17 +149,20 @@ export default function Header() {
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: 'var(--gold-400)', display: 'inline-flex' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="14" r="6"></circle>
-                <path d="m9 3 3 6 3-6"></path>
-              </svg>
-            </span>
-            {home.announcement_left}
+            {announcement && (
+              <span style={{ color: 'var(--gold-400)', display: 'inline-flex' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="14" r="6"></circle>
+                  <path d="m9 3 3 6 3-6"></path>
+                </svg>
+              </span>
+            )}
+            {announcement}
           </span>
-          <span>{home.announcement_right}</span>
+          <span>{shippingOffer}</span>
         </div>
       </div>
+      )}
 
       {/* Sticky header */}
       <header
@@ -179,14 +189,26 @@ export default function Header() {
             flexWrap: 'wrap',
           }}
         >
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <img
-              id="site-logo"
-              ref={logoRef}
-              src="/assets/logo-transparent.svg"
-              alt={BRAND.name}
-              style={{ height: 60, width: 'auto', transformOrigin: 'left center', display: 'block' }}
-            />
+          {/* The business's saved logo, or its name. Never a generic logo
+              (support #133): a placeholder mark reads as someone else's brand. */}
+          <Link href="/" aria-label={`${brand.name} home`} style={{ display: 'flex', alignItems: 'center', flexShrink: 1, minWidth: 0, maxWidth: '100%', textDecoration: 'none' }}>
+            {brand.logoUrl ? (
+              <img
+                id="site-logo"
+                ref={logoRef}
+                src={brand.logoUrl}
+                alt={brand.name}
+                style={{ height: 60, width: 'auto', maxWidth: 'min(260px, 70vw)', objectFit: 'contain', transformOrigin: 'left center', display: 'block' }}
+              />
+            ) : (
+              <span
+                id="site-logo"
+                ref={logoRef}
+                style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 3vw, 30px)', lineHeight: 1.1, textTransform: 'uppercase', color: 'var(--ink)', transformOrigin: 'left center', display: 'block', overflowWrap: 'anywhere' }}
+              >
+                {brand.name}
+              </span>
+            )}
           </Link>
 
           <nav style={{ display: 'flex', gap: '12px 24px', flex: '1 1 auto', flexWrap: 'wrap', minWidth: 0 }}>
@@ -194,9 +216,10 @@ export default function Header() {
             {/* Store links appear only once a shop is connected — a nav item
                 leading to a 404 is worse than one that is simply absent. */}
             {HAS_COMMERCE && <NavLink href="/shop" active={shopActive}>Shop</NavLink>}
-            {!HAS_COMMERCE && <NavLink href="/#services" active={false}>Services</NavLink>}
-            <NavLink href="/#about-band" active={false}>About</NavLink>
-            {!HAS_COMMERCE && <NavLink href="/#contact" active={false}>Contact</NavLink>}
+            {!HAS_COMMERCE && home.services?.items?.length > 0 && <NavLink href="/#services" active={false}>Services</NavLink>}
+            {/* Only link to sections that are on the page. */}
+            {hasAbout && <NavLink href="/#about-band" active={false}>About</NavLink>}
+            {!HAS_COMMERCE && hasContact && <NavLink href="/#contact" active={false}>Contact</NavLink>}
           </nav>
 
           {/* Product search only exists on a store: on a brochure site /shop

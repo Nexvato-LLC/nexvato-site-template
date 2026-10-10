@@ -13,7 +13,6 @@ import BrandRoster from '@/components/sections/BrandRoster';
 import Services from '@/components/sections/Services';
 import Contact from '@/components/sections/Contact';
 import { HAS_COMMERCE, resolveUrl } from '@/lib/site-mode';
-import Input from '@/components/ds/Input';
 import dynamic from 'next/dynamic';
 
 const HeroBackdrop = dynamic(() => import('@/components/HeroBackdrop'), { ssr: false });
@@ -33,7 +32,9 @@ export default function Home() {
   useStorefrontMotion();
   const router = useRouter();
   const { catalog, add } = useCart();
-  const { home, promos } = useSiteContent();
+  // Copy is the business's saved website content where it exists (support
+  // #133); blank fields hide their element instead of showing sample text.
+  const { home, promos, hasAbout } = useSiteContent();
 
   // Curated via Medusa collections, with graceful fallbacks.
   const featured = (() => {
@@ -62,20 +63,22 @@ export default function Home() {
         <HeroBackdrop />
         <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'radial-gradient(100% 82% at 50% 50%, rgba(0,5,46,0.72) 0%, rgba(0,5,46,0.45) 45%, rgba(0,5,46,0.22) 100%)' }} />
         <div style={{ position: 'relative', zIndex: 3, width: '100%', maxWidth: 760, margin: '0 auto', padding: '0 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 22 }}>
-          <div data-rise><Eyebrow color="onDark" rule>{home.hero_eyebrow}</Eyebrow></div>
-          <h1 data-split style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(54px,7vw,88px)', lineHeight: 0.96, letterSpacing: '0.01em', textTransform: 'uppercase', color: 'var(--white)', textShadow: '0 2px 28px rgba(0,0,0,0.5)' }}>
+          {home.hero_eyebrow && <div data-rise><Eyebrow color="onDark" rule>{home.hero_eyebrow}</Eyebrow></div>}
+          <h1 data-split style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(40px,7vw,88px)', lineHeight: 0.96, letterSpacing: '0.01em', textTransform: 'uppercase', color: 'var(--white)', textShadow: '0 2px 28px rgba(0,0,0,0.5)', overflowWrap: 'anywhere' }}>
             <Headline text={home.hero_headline} accent={home.hero_accent} />
           </h1>
-          <p data-rise style={{ margin: 0, maxWidth: 520, fontSize: 17, lineHeight: 1.7, color: 'var(--text-on-dark-muted)' }}>{home.hero_subcopy}</p>
+          {home.hero_subcopy && <p data-rise style={{ margin: 0, maxWidth: 520, fontSize: 17, lineHeight: 1.7, color: 'var(--text-on-dark-muted)' }}>{home.hero_subcopy}</p>}
           <div data-rise style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
             <Button variant="primary" size="lg" arrow onClick={() => handleCta(resolveUrl(home.hero_cta_primary_url, '#services'))}>{home.hero_cta_primary_label}</Button>
-            <Button variant="outline" size="lg" onClick={() => handleCta(resolveUrl(home.hero_cta_secondary_url, '#about-band'))} style={{ color: 'var(--white)', border: '1px solid rgba(255,255,255,0.55)', background: 'transparent' }}>{home.hero_cta_secondary_label}</Button>
+            {home.hero_cta_secondary_label && <Button variant="outline" size="lg" onClick={() => handleCta(resolveUrl(home.hero_cta_secondary_url, '#about-band'))} style={{ color: 'var(--white)', border: '1px solid rgba(255,255,255,0.55)', background: 'transparent' }}>{home.hero_cta_secondary_label}</Button>}
           </div>
+          {(home.hero_trust || []).length > 0 && (
           <div data-rise style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 18, marginTop: 8, fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.62)' }}>
-            {(home.hero_trust || []).map((t, i) => (
+            {home.hero_trust.map((t, i) => (
               <span key={i} style={{ display: 'inline-flex', gap: 18 }}>{i > 0 && <span aria-hidden="true">·</span>}<span>{t}</span></span>
             ))}
           </div>
+          )}
         </div>
       </section>
 
@@ -99,7 +102,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* COLLECTIBLES SPOTLIGHT */}
+      {/* COLLECTIBLES SPOTLIGHT — only when products are marked for it. */}
+      {collectibles.length > 0 && (
       <section data-band style={{ background: 'var(--white)', padding: '80px 0' }}>
         <div style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px' }}>
           <div data-rise><SectionHeading eyebrow={home.collectibles?.eyebrow} title={home.collectibles?.title} subtitle={home.collectibles?.subtitle} /></div>
@@ -110,6 +114,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      )}
 
       {/* SHOP BY BRANDS — hides itself when no brands are configured. */}
       <BrandRoster />
@@ -134,8 +139,10 @@ export default function Home() {
         </section>
       )}
 
-      {/* FOLDS OF HONOR CAUSE BAND */}
-      <section id="cause-band" data-band style={{ position: 'relative', background: 'var(--navy-700)', marginTop: 80, overflow: 'hidden' }}>
+      {/* ABOUT BAND — the business's saved About copy. Hidden when there is
+          none: sample "about us" text is a claim nobody made (support #133). */}
+      {hasAbout && (
+      <section id="about-band" data-band style={{ position: 'relative', background: 'var(--navy-700)', marginTop: 80, overflow: 'hidden' }}>
         <canvas data-fx="stars" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, transition: 'opacity 1.2s ease-out', pointerEvents: 'none' }} />
         <div style={{ position: 'relative', maxWidth: 'var(--container)', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(360px,100%),1fr))', gap: 48, alignItems: 'center', padding: '80px 24px' }}>
           <div data-rise style={{ position: 'relative', minHeight: 340, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -147,16 +154,18 @@ export default function Home() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div data-rise><Eyebrow color="onDark">{home.cause_eyebrow}</Eyebrow></div>
-            <h2 data-split style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(38px,4.4vw,54px)', lineHeight: 0.98, textTransform: 'uppercase', color: 'var(--white)' }}>{home.cause_title}</h2>
-            <p data-rise style={{ margin: 0, maxWidth: 480, fontSize: 16, lineHeight: 1.7, color: 'var(--text-on-dark-muted)' }}>{home.cause_body}</p>
+            {home.cause_title && <h2 data-split style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,4.4vw,54px)', lineHeight: 0.98, textTransform: 'uppercase', color: 'var(--white)', overflowWrap: 'anywhere' }}>{home.cause_title}</h2>}
+            {home.cause_body && <p data-rise style={{ margin: 0, maxWidth: 480, fontSize: 16, lineHeight: 1.7, color: 'var(--text-on-dark-muted)', whiteSpace: 'pre-line' }}>{home.cause_body}</p>}
+            {(home.cause_stats || []).length > 0 && (
             <div data-rise style={{ display: 'flex', gap: 40, flexWrap: 'wrap', marginTop: 10 }}>
-              {(home.cause_stats || []).map((s, i) => (
+              {home.cause_stats.map((s, i) => (
                 <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span data-count={s.value} style={{ fontFamily: 'var(--font-display)', fontSize: 44, lineHeight: 1, color: 'var(--gold-400)' }}>0</span>
                   <span style={{ fontFamily: 'var(--font-heading)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-on-dark-muted)' }}>{s.label}</span>
                 </div>
               ))}
             </div>
+            )}
             <div data-rise style={{ marginTop: 6 }}>
               <a href={resolveUrl(home.cause_cta_url || '/shop', '#contact')} onClick={(e) => { e.preventDefault(); handleCta(resolveUrl(home.cause_cta_url, '#contact')); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--gold-400)', textDecoration: 'none', borderBottom: '1px solid var(--gold-600)', paddingBottom: 4 }}>
                 {home.cause_cta_label}
@@ -166,22 +175,11 @@ export default function Home() {
           </div>
         </div>
       </section>
+      )}
 
       {/* CONTACT — every field optional; the whole band hides if none are set. */}
       <Contact contact={home.contact} />
 
-      {/* NEWSLETTER */}
-      <section data-band style={{ background: 'var(--cream-100)' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '72px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
-          <div data-rise><Eyebrow color="royal">{home.newsletter_eyebrow}</Eyebrow></div>
-          <h2 data-split style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(32px,4vw,46px)', lineHeight: 0.98, textTransform: 'uppercase', color: 'var(--ink)' }}>{home.newsletter_title}</h2>
-          <p data-rise style={{ margin: 0, maxWidth: 440, fontSize: 15, lineHeight: 1.7, color: 'var(--text-body)' }}>{home.newsletter_subcopy}</p>
-          <div data-rise style={{ display: 'flex', gap: 10, width: 'min(440px,100%)', marginTop: 6 }}>
-            <div style={{ flex: '1 1 auto' }}><Input type="email" placeholder="Email address" size="md" /></div>
-            <Button variant="navy" arrow>{home.newsletter_button_label}</Button>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
