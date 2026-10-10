@@ -1,18 +1,20 @@
 import ShopClient from './ShopClient';
-import { BRAND } from "@/lib/brand";
+import { getStorefront } from '@/lib/storefront-server';
 
 const one = (v) => (Array.isArray(v) ? v[0] : v);
 
 export async function generateMetadata({ searchParams }) {
   const sp = (await searchParams) || {};
+  const { content } = await getStorefront();
+  const name = content.brand.name;
   const cat = one(sp.cat);
   const brand = one(sp.brand);
   const q = one(sp.q);
   const label = cat || brand;
-  const title = q ? `Search: ${q}` : label ? `${label} Gear` : 'Shop All Gear';
+  const title = q ? `Search: ${q}` : label ? label : 'Shop';
   const description = label
-    ? `Shop ${label} at ${BRAND.name}. ${BRAND.shortDescription}`
-    : `Shop the full ${BRAND.name} collection.`;
+    ? `Shop ${label} at ${name}.`
+    : `Shop the full ${name} collection.`;
   const canonical = cat
     ? `/shop?cat=${encodeURIComponent(cat)}`
     : brand

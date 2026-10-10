@@ -69,9 +69,12 @@ export default function ProductCard({
     if (onWishlist) onWishlist();
     else setWishLocal((v) => !v);
   };
-  const handleQuickAdd = (e) => {
+  const handleQuickAdd = async (e) => {
     e.stopPropagation();
-    onQuickAdd?.();
+    // "Added ✓" only when the add succeeded; a refusal is explained in the
+    // cart drawer instead (support #142). Handlers that return nothing keep
+    // the old behaviour.
+    if ((await onQuickAdd?.()) === false) return;
     setAdded(true);
     if (addTimer.current) clearTimeout(addTimer.current);
     addTimer.current = setTimeout(() => setAdded(false), 1300);

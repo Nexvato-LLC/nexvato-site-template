@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import PriceTag from '@/components/ds/PriceTag';
 import Button from '@/components/ds/Button';
 import { useCart } from '@/components/CartProvider';
+import DiscountCodeForm from '@/components/DiscountCodeForm';
 
 /** Flag-colored confetti burst — one-shot, cleans itself up. gsap-gated. */
 function fireConfetti(host) {
@@ -30,7 +31,7 @@ function fireConfetti(host) {
 
 export default function CartDrawer() {
   const router = useRouter();
-  const { cartOpen, closeCart, items, cartCount, subtotal, shipMsg, shipPct, remaining, setQty, remove } = useCart();
+  const { cart, cartOpen, closeCart, cartError, items, cartCount, subtotal, discount, shipMsg, shipPct, remaining, shipUnlocked, setQty, remove } = useCart();
   const shipHostRef = useRef(null);
   const closeBtnRef = useRef(null);
   const prevRemaining = useRef(remaining);
@@ -51,8 +52,9 @@ export default function CartDrawer() {
     return () => { clearTimeout(t); document.removeEventListener('keydown', onKey); };
   }, [cartOpen, closeCart]);
 
-  const unlocked = remaining === 0 && items.length > 0;
+  const unlocked = shipUnlocked && items.length > 0;
   useEffect(() => {
+    // remaining is null when the store makes no free-shipping promise.
     if (prevRemaining.current > 0 && remaining === 0 && items.length > 0) {
       const reduced =
         window.matchMedia('(prefers-reduced-motion: reduce)').matches || window.__JAYS_FORCE_REDUCED === true;
@@ -75,6 +77,16 @@ export default function CartDrawer() {
           </button>
         </div>
 
+        {/* Why the last add / quantity change was refused (support #142). */}
+        {cartError && (
+          <div role="alert" style={{ margin: '14px 22px 0', padding: '10px 12px', border: '1px solid var(--danger)', borderRadius: 'var(--radius-md)', background: 'var(--white)', color: 'var(--danger)', fontSize: 13.5, lineHeight: 1.5 }}>
+            {cartError}
+          </div>
+        )}
+
+        {/* Free-shipping progress from the store's real threshold and the
+            server cart (support #138). No promise configured → nothing shown. */}
+        {shipMsg && (
         <div ref={shipHostRef} style={{ position: 'relative', padding: '16px 22px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
             <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: unlocked ? 'var(--gold-600)' : 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'color var(--dur-normal)' }}>
@@ -86,6 +98,7 @@ export default function CartDrawer() {
             <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.36s ease-out, background 0.36s', width: `${shipPct}%`, background: unlocked ? 'var(--gold-500)' : 'var(--brand-royal)' }} />
           </div>
         </div>
+        )}
 
         <div style={{ flex: '1 1 auto', overflowY: 'auto', padding: '8px 22px' }}>
           {items.length === 0 && (
@@ -94,7 +107,7 @@ export default function CartDrawer() {
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" /></svg>
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, textTransform: 'uppercase', color: 'var(--ink)' }}>Your cart is empty</div>
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', maxWidth: 240, lineHeight: 1.6 }}>Add some all-American gear and it&rsquo;ll show up right here.</p>
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', maxWidth: 240, lineHeight: 1.6 }}>Add something from the shop and it&rsquo;ll show up right here.</p>
               <Button variant="primary" arrow onClick={goShop}>Shop the Collection</Button>
             </div>
           )}
@@ -103,7 +116,7 @@ export default function CartDrawer() {
               <div role="img" aria-label={it.title} style={{ width: 68, height: 68, borderRadius: 4, flexShrink: 0, backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url("${it.image || ''}")` }} />
               <div style={{ flex: '1 1 auto', minWidth: 0 }}>
                 <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{it.brand}</div>
-                <div style={{ fontWeight: 700, fontSize: 13.5, lineHeight: 1.3, color: 'var(--text-strong)', margin: '2px 0 6px' }}>{it.title}</div>
+                <div style={{ fontWeight: 700, fontSize: 13.5, lineHeight: 1.3, color: 'var(--text-strong)', margin: '2px 0 6px' }}>{it.title}{it.variant ? <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> · {it.variant}</span> : null}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border-strong)', borderRadius: 2 }}>
                     <button onClick={() => setQty(it.id, -1)} aria-label="Decrease quantity" className="site-qtybtn" style={{ width: 40, height: 40, background: 'none', border: 'none', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}>
@@ -126,10 +139,20 @@ export default function CartDrawer() {
 
         {items.length > 0 && (
           <div data-cart-foot style={{ padding: '18px 22px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <DiscountCodeForm />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-strong)' }}>Subtotal</span>
               <PriceTag price={subtotal} size="lg" />
             </div>
+            {discount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 14, color: 'var(--success)', fontWeight: 600 }}>
+                <span>Discounts</span>
+                <span>&minus;${discount.toFixed(2)}</span>
+              </div>
+            )}
+            {cart?.status === 'pending_payment' && (
+              <p role="status" style={{ margin: 0, fontSize: 12.5, color: 'var(--text-body)' }}>Payment has started for this cart. Finish at checkout, or choose &ldquo;Change details&rdquo; there to edit it.</p>
+            )}
             <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Shipping &amp; taxes calculated at checkout.</p>
             <Button variant="primary" size="lg" fullWidth arrow onClick={goCheckout}>Checkout</Button>
             <Button variant="outline" fullWidth onClick={closeCart}>Continue Shopping</Button>

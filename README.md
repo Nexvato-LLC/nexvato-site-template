@@ -10,8 +10,8 @@ with clean history. Push to `main` and it deploys.
 
 | File | What's in it |
 |---|---|
-| `lib/brand.js` | **Start here.** Business name, tagline, description. Feeds the page title, social previews, structured data, header and footer. |
-| `lib/content.js` | All homepage and footer copy — headlines, CTAs, the about band, navigation links. |
+| `lib/brand.js` | **Start here.** Business name, tagline, description. Feeds the page title, social previews, structured data, header and footer. On a store, the name and logo saved in the Nexvato dashboard take precedence. |
+| `lib/content.js` | All homepage and footer copy — headlines, CTAs, the about band, navigation links. On a store, the published website copy saved in the dashboard takes precedence. **No claims in defaults:** no ratings, returns, warranty, hours or "sale" the business has not stated. |
 | `lib/data.js` | The brand/category filter lists shown on `/shop`. Empty by default. |
 | `styles/ds/tokens/colors.css` | The whole palette. Semantic names (`--brand-royal`, `--surface-navy`) stay put; change the primitives at the top and the entire site re-themes. |
 | `public/assets/` | Logo, hero, promo and about imagery. Ships as neutral SVG placeholders — replace them. |
@@ -30,7 +30,7 @@ These are injected automatically when the site is provisioned:
 | `NEXT_PUBLIC_SHOP_ID` | which store this site sells |
 | `NEXT_PUBLIC_SHOP_API_URL` | the Nexvato commerce API |
 | `NEXT_PUBLIC_SITE_URL` | the public URL (canonicals + sitemap) |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | checkout key (publishable — not a secret) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | **not used.** Checkout reads the key and payment readiness from the store's settings at runtime, so a stale build-time key can never switch on a card form. |
 
 ⚠️ **Only `NEXT_PUBLIC_*` values are ever injected, and every one of them is
 public.** They ship inside the browser bundle. Never put a secret in this repo
@@ -52,7 +52,7 @@ Nothing in this repo changes — the switch is the presence of
 
 | | Website (no shop) | Store (shop connected) |
 |---|---|---|
-| Homepage | hero, services, about, promos, contact, newsletter | all of that **plus** product grids |
+| Homepage | hero, services, about, promos, contact | all of that **plus** product grids |
 | Header | Home / Services / About / Contact | Home / **Shop** / About, plus cart |
 | `/shop`, `/checkout`, `/account`, `/product` | **404** | live |
 | Cart drawer | not rendered | rendered |
@@ -69,9 +69,9 @@ still has services to describe; a brochure site still runs promotions.
 
 ## What's in the box
 
-- Homepage with animated hero, featured products, promo cards, about band, newsletter
+- Homepage with animated hero, featured products, promo cards, about band — copy, name and logo come from the store's saved website content when it exists
 - `/shop` with category + brand filters, price and rating facets
-- Product detail pages with variants and add-to-cart
+- Product detail pages with the product's real photos and variants, and add-to-cart
 - Slide-out cart, full checkout with Stripe, order confirmation
 - Customer accounts: register, sign in, order history, saved addresses
 - `sitemap.xml`, `robots.txt`, canonical URLs, Open Graph and structured data

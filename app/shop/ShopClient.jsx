@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { JAYS_DATA } from '@/lib/data';
 import { useCart } from '@/components/CartProvider';
 import useStorefrontMotion from '@/lib/useStorefrontMotion';
@@ -31,9 +31,19 @@ const SORTS = [
   { key: 'rated', label: 'Top Rated' },
 ];
 
+/** The query string for a filter state: what this page writes, and expects to read back. */
+function shopQuery(cat, brand, q) {
+  const qs = new URLSearchParams();
+  if (cat) qs.set('cat', cat);
+  if (brand) qs.set('brand', brand);
+  if (q) qs.set('q', q);
+  return qs.toString();
+}
+
 export default function ShopClient({ initialCat = null, initialBrand = null, initialQ = '' }) {
   useStorefrontMotion();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { catalog, catalogLoading, add } = useCart();
 
   const [filterCat, setFilterCat] = useState(initialCat);
@@ -50,6 +60,10 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
   const flipRef = useRef(null);
   const sortRef = useRef(null);
   const firstUrl = useRef(true);
+  // The query the URL and the filters last agreed on. A URL that differs from
+  // it was changed by something other than this page.
+  const syncedQuery = useRef(shopQuery(initialCat, initialBrand, initialQ));
+  const urlQuery = shopQuery(searchParams.get('cat'), searchParams.get('brand'), searchParams.get('q') || '');
 
   // --- predicates ---
   const bucket = PRICE_BUCKETS.find((b) => b.key === priceKey) || PRICE_BUCKETS[0];
@@ -123,16 +137,35 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
     flipRef.current = null;
   }, [filterCat, filterBrand, priceKey, minRating, sort, visible]);
 
-  // --- URL sync (cat/brand/q — what the server seeds from) ---
+  // --- URL -> filters: re-read ?q= (and cat/brand) whenever the URL changes ---
+  // Support #151. The header's "Search products…" pushes /shop?q=…, but Next
+  // keeps this component — and its state — mounted across a navigation that
+  // only changes the query string. The filters were seeded from the URL once,
+  // on first render, so a header search made from the collection page changed
+  // the address bar and nothing else: "Search the collection" kept the old
+  // text and the grid kept the old results. Back/forward had the same gap.
+  useEffect(() => {
+    if (urlQuery === syncedQuery.current) return; // our own write, read back
+    syncedQuery.current = urlQuery;
+    const qs = new URLSearchParams(urlQuery);
+    setFilterCat(qs.get('cat'));
+    setFilterBrand(qs.get('brand'));
+    setSearchQ(qs.get('q') || '');
+    setVisible(9);
+  }, [urlQuery]);
+
+  // --- filters -> URL (cat/brand/q — what the server seeds from) ---
+  // history.replaceState, not router.replace: Next keeps useSearchParams in
+  // step with it, and it costs no server round trip per keystroke. A round
+  // trip resolving after a later keystroke would read back as a URL change
+  // and roll the search box back to the older text.
   useEffect(() => {
     if (firstUrl.current) { firstUrl.current = false; return; }
-    const qs = new URLSearchParams();
-    if (filterCat) qs.set('cat', filterCat);
-    if (filterBrand) qs.set('brand', filterBrand);
-    if (searchQ) qs.set('q', searchQ);
-    const str = qs.toString();
-    router.replace(str ? `/shop?${str}` : '/shop', { scroll: false });
-  }, [filterCat, filterBrand, searchQ, router]);
+    const str = shopQuery(filterCat, filterBrand, searchQ);
+    if (str === syncedQuery.current) return; // the URL already says this
+    syncedQuery.current = str;
+    window.history.replaceState(null, '', str ? `/shop?${str}` : '/shop');
+  }, [filterCat, filterBrand, searchQ]);
 
   // --- close the sort popover on outside click / escape ---
   useEffect(() => {

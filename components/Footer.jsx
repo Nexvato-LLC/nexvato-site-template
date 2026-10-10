@@ -14,7 +14,7 @@ function FootLink({ url, style, children }) {
 }
 
 export default function Footer() {
-  const { home } = useSiteContent();
+  const { home, brand } = useSiteContent();
   const f = home.footer || {};
   // Drop links to routes that do not exist on a brochure site, then drop any
   // column left empty. Done by URL rather than by column name so an editor
@@ -32,10 +32,17 @@ export default function Footer() {
   return (
     <footer style={{ background: 'var(--navy-800)', color: 'var(--white)' }}>
       <div style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '56px 24px 28px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 40, paddingBottom: 40, borderBottom: '1px solid rgba(255,255,255,0.14)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 300 }}>
-            <img src="/assets/logo-transparent.svg" alt={BRAND.name} style={{ height: 84, width: 'auto', alignSelf: 'flex-start' }} />
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--text-on-dark-muted)' }}>{f.blurb}</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(210px,100%),1fr))', gap: 40, paddingBottom: 40, borderBottom: '1px solid rgba(255,255,255,0.14)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 300, minWidth: 0 }}>
+            {/* Saved logo or the business name — never a generic mark
+                (support #133). Constrained to its column so a wide logo
+                cannot push the page sideways on a phone (support #135). */}
+            {brand.logoUrl ? (
+              <img src={brand.logoUrl} alt={brand.name} style={{ height: 'auto', maxHeight: 84, width: 'auto', maxWidth: '100%', objectFit: 'contain', alignSelf: 'flex-start' }} />
+            ) : (
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 1.1, textTransform: 'uppercase', color: 'var(--white)', overflowWrap: 'anywhere' }}>{brand.name}</span>
+            )}
+            {f.blurb && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--text-on-dark-muted)' }}>{f.blurb}</p>}
           </div>
           {columns.map((col) => (
             <div key={col.title} style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
@@ -47,7 +54,7 @@ export default function Footer() {
           ))}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', paddingTop: 22, fontSize: 13, color: 'var(--text-on-dark-muted)' }}>
-          <span>© {new Date().getFullYear()} {BRAND.name} · {BRAND.footerSuffix}</span>
+          <span>© {new Date().getFullYear()} {brand.name} · {BRAND.footerSuffix}</span>
           <span style={{ display: 'flex', gap: 20 }}>
             {legal.map((l) => (
               <FootLink key={l.label} url={l.url} style={{ color: 'inherit', textDecoration: 'none' }}>{l.label}</FootLink>
