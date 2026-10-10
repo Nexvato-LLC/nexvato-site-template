@@ -14,6 +14,7 @@ import Button from '@/components/ds/Button';
 import Input from '@/components/ds/Input';
 import AddressForm, { EMPTY_ADDRESS, toShippingAddress, isAddressComplete } from '@/components/AddressForm';
 import StripePaymentSection, { stripeEnabled } from '@/components/StripePaymentSection';
+import DiscountCodeForm from '@/components/DiscountCodeForm';
 
 const money = (n) => '$' + Number(n || 0).toFixed(2);
 const EMAIL_RE = /.+@.+\..+/;
@@ -34,7 +35,7 @@ const oneLine = (a) => [a.address_1, a.city, a.province, a.postal_code].filter(B
 export default function CheckoutPage() {
   useStorefrontMotion();
   const router = useRouter();
-  const { cartId, cart, items, subtotal, catalogLoading, refreshCart, clear } = useCart();
+  const { cartId, cart, items, subtotal, discount, catalogLoading, refreshCart, clear } = useCart();
   const { customer, login, register, logout } = useAuth();
 
   // account step (guest branch)
@@ -448,8 +449,15 @@ export default function CheckoutPage() {
               </div>
             ))}
           </div>
+          {/* Support #143. Locked once the payment session exists: preparing
+              payment freezes the order's offers, and the server refuses code
+              changes from then on. */}
+          <div style={{ borderTop: '1px solid var(--border)', padding: '14px 0' }}>
+            <DiscountCodeForm locked={!!clientSecret} />
+          </div>
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 14, color: 'var(--text-body)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>{money(subtotal)}</span></div>
+            {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--success)', fontWeight: 600 }}><span>Discounts</span><span>&minus;{money(discount)}</span></div>}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Shipping</span><span>{shipping ? money(shipping) : '—'}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 17, color: 'var(--ink)', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 2 }}><span>Total</span><span>{money(total)}</span></div>
           </div>

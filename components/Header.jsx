@@ -113,9 +113,12 @@ export default function Header() {
     };
   }, []);
 
+  // Support #151: the collection page re-reads ?q= whenever it changes, so
+  // this works from /shop itself as well as from every other page.
   const submitSearch = (e) => {
     e.preventDefault();
-    router.push('/shop?q=' + encodeURIComponent(q));
+    const term = q.trim();
+    router.push(term ? '/shop?q=' + encodeURIComponent(term) : '/shop');
   };
 
   return (
@@ -196,17 +199,26 @@ export default function Header() {
             {!HAS_COMMERCE && <NavLink href="/#contact" active={false}>Contact</NavLink>}
           </nav>
 
+          {/* Product search only exists on a store: on a brochure site /shop
+              is a 404. action/name keep it working before hydration too. */}
+          {HAS_COMMERCE && (
           <form
+            role="search"
+            action="/shop"
             onSubmit={submitSearch}
             style={{ flex: '1 1 170px', maxWidth: 240, minWidth: 150 }}
           >
             <Input
+              type="search"
+              name="q"
+              aria-label="Search products"
               placeholder="Search products…"
               size="sm"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
           </form>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             {customer ? (

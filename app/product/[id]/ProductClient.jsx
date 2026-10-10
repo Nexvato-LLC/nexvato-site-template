@@ -73,8 +73,10 @@ export default function ProductClient({ initial }) {
   const savePct = saveAmt ? Math.round((1 - cur.price / cur.compareAt) * 100) : 0;
   const specs = cur.specs && cur.specs.length ? cur.specs : [['Brand', cur.brand], ['Category', cur.cat]];
 
-  const doAdd = () => {
-    add(cur.id, qty);
+  const doAdd = async () => {
+    // "Added ✓" only once the server has the item. A refusal (sold out, not
+    // enough stock) is explained in the cart drawer instead (support #142).
+    if (!(await add(cur.id, qty))) return;
     setAdded(true);
     if (addTimer.current) clearTimeout(addTimer.current);
     addTimer.current = setTimeout(() => setAdded(false), 1400);

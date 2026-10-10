@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import PriceTag from '@/components/ds/PriceTag';
 import Button from '@/components/ds/Button';
 import { useCart } from '@/components/CartProvider';
+import DiscountCodeForm from '@/components/DiscountCodeForm';
 
 /** Flag-colored confetti burst — one-shot, cleans itself up. gsap-gated. */
 function fireConfetti(host) {
@@ -30,7 +31,7 @@ function fireConfetti(host) {
 
 export default function CartDrawer() {
   const router = useRouter();
-  const { cartOpen, closeCart, items, cartCount, subtotal, shipMsg, shipPct, remaining, setQty, remove } = useCart();
+  const { cartOpen, closeCart, cartError, items, cartCount, subtotal, discount, shipMsg, shipPct, remaining, setQty, remove } = useCart();
   const shipHostRef = useRef(null);
   const closeBtnRef = useRef(null);
   const prevRemaining = useRef(remaining);
@@ -74,6 +75,13 @@ export default function CartDrawer() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         </div>
+
+        {/* Why the last add / quantity change was refused (support #142). */}
+        {cartError && (
+          <div role="alert" style={{ margin: '14px 22px 0', padding: '10px 12px', border: '1px solid var(--danger)', borderRadius: 'var(--radius-md)', background: 'var(--white)', color: 'var(--danger)', fontSize: 13.5, lineHeight: 1.5 }}>
+            {cartError}
+          </div>
+        )}
 
         <div ref={shipHostRef} style={{ position: 'relative', padding: '16px 22px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
@@ -126,10 +134,17 @@ export default function CartDrawer() {
 
         {items.length > 0 && (
           <div data-cart-foot style={{ padding: '18px 22px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <DiscountCodeForm />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-strong)' }}>Subtotal</span>
               <PriceTag price={subtotal} size="lg" />
             </div>
+            {discount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 14, color: 'var(--success)', fontWeight: 600 }}>
+                <span>Discounts</span>
+                <span>&minus;${discount.toFixed(2)}</span>
+              </div>
+            )}
             <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Shipping &amp; taxes calculated at checkout.</p>
             <Button variant="primary" size="lg" fullWidth arrow onClick={goCheckout}>Checkout</Button>
             <Button variant="outline" fullWidth onClick={closeCart}>Continue Shopping</Button>
