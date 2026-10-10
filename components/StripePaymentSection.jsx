@@ -1,30 +1,29 @@
 'use client';
 
 /**
- * Stripe payment section (C0).
+ * Stripe Payment Element for checkout.
  *
- * Renders the Stripe Payment Element, which shows EVERY payment method enabled
- * on the Stripe account for this amount/currency — card, and Klarna / Affirm /
- * Afterpay when they're switched on in the Stripe Dashboard. That is why there
- * is no per-method code here: enabling buy-now-pay-later is configuration, not
- * a code change (see medusa-config.ts for the backend half).
+ * The publishable key comes from the store's settings at RUNTIME
+ * (`publishableKey` on GET /:shopId), never from the build (support #135).
+ * A key baked into the bundle went stale the moment the store's Stripe mode
+ * changed, and could switch on a card form for a store that cannot take
+ * payment. The Element shows every method enabled on the store's Stripe
+ * account for this amount — card, and buy-now-pay-later when switched on.
  *
- * Renders NOTHING when NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is unset, so the
- * storefront falls back to the honest manual-payment notice instead of showing
- * card fields that cannot charge.
+ * The parent keeps ONE primary action ("Place Order"): this component hands
+ * it `confirm(returnUrl)` and `retrieve()` through `onReady`, and never
+ * submits anything itself.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
-const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-
-/** True when the storefront is configured to take real card payments. */
-export const stripeEnabled = Boolean(PUBLISHABLE_KEY);
-
-// loadStripe must be called once, outside render, or the SDK re-initializes.
-const stripePromise = PUBLISHABLE_KEY ? loadStripe(PUBLISHABLE_KEY) : null;
+// One Stripe instance per key: loadStripe must not re-run on every render.
+const stripeByKey = new Map();
+function stripeFor(key) {
+  if (!stripeByKey.has(key)) stripeByKey.set(key, loadStripe(key));
+  return stripeByKey.get(key);
+}
 
 /** Match the storefront's look so the embedded fields don't feel bolted on. */
 const appearance = {
@@ -39,36 +38,46 @@ const appearance = {
   },
 };
 
-function PaymentFields({ onReady }) {
-  const stripe = useStripe();
-  const elements = useElements();
+export default function StripePaymentSection({ publishableKey, clientSecret, onReady }) {
+  const mountRef = useRef(null);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    if (!stripe || !elements) return;
-    // Hand the parent a confirm() it can call from the existing Place Order
-    // button, so the checkout keeps ONE primary action.
-    onReady(async (returnUrl) => {
-      // redirect: 'if_required' keeps cards inline; redirect-based methods
-      // (Klarna, Affirm) navigate away and come back to returnUrl, where the
-      // page finishes the order from the query params.
-      const result = await stripe.confirmPayment({
-        elements,
-        confirmParams: { return_url: returnUrl },
-        redirect: 'if_required',
-      });
-      return result;
-    });
-    return () => onReady(null);
-  }, [stripe, elements, onReady]);
+    if (!publishableKey || !clientSecret) return undefined;
+    let alive = true;
+    let element = null;
+    setLoadError('');
+    stripeFor(publishableKey)
+      .then((stripe) => {
+        if (!alive || !mountRef.current) return;
+        if (!stripe) throw new Error('Payment library unavailable');
+        const elements = stripe.elements({ clientSecret, appearance });
+        element = elements.create('payment', { layout: 'tabs' });
+        element.mount(mountRef.current);
+        element.on('ready', () => {
+          if (!alive) return;
+          onReady({
+            // redirect: 'if_required' keeps cards inline; redirect-based
+            // methods (Klarna, Affirm) leave and come back to returnUrl.
+            confirm: (returnUrl) => stripe.confirmPayment({ elements, confirmParams: { return_url: returnUrl }, redirect: 'if_required' }),
+            // Reconcile an attempt whose outcome is unknown (network drop)
+            // by READING the intent — never by confirming it again.
+            retrieve: () => stripe.retrievePaymentIntent(clientSecret),
+          });
+        });
+      })
+      .catch(() => { if (alive) setLoadError('The payment form could not be loaded. Refresh this page to try again.'); });
+    return () => {
+      alive = false;
+      onReady(null);
+      try { element?.destroy(); } catch {}
+    };
+  }, [publishableKey, clientSecret, onReady]);
 
-  return <PaymentElement options={{ layout: 'tabs' }} />;
-}
-
-export default function StripePaymentSection({ clientSecret, onReady }) {
-  if (!stripePromise || !clientSecret) return null;
   return (
-    <Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
-      <PaymentFields onReady={onReady} />
-    </Elements>
+    <div>
+      <div ref={mountRef} />
+      {loadError && <p role="alert" style={{ margin: '10px 0 0', color: 'var(--danger)', fontSize: 13.5 }}>{loadError}</p>}
+    </div>
   );
 }

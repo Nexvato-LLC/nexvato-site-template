@@ -12,8 +12,8 @@ import Eyebrow from '@/components/ds/Eyebrow';
 import Button from '@/components/ds/Button';
 import Input from '@/components/ds/Input';
 import AddressForm, { EMPTY_ADDRESS, toShippingAddress, isAddressComplete } from '@/components/AddressForm';
+import { formatCents } from '@/lib/shipping';
 
-const money = (n) => '$' + Number(n || 0).toFixed(2);
 const lbl = { fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-strong)' };
 const oneLine = (a) => [a.address_1, a.city, a.province, a.postal_code].filter(Boolean).join(', ');
 const card = { border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px 22px', background: 'var(--white)' };
@@ -160,10 +160,12 @@ export default function AccountPage() {
             orders.map((o) => (
               <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '14px 0', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
                 <div>
-                  <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>Order #{o.display_id}</div>
-                  <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{new Date(o.created_at).toLocaleDateString()} · {(o.items || []).reduce((t, it) => t + (it.quantity || 0), 0)} item(s)</div>
+                  {/* The Shop engine's fields (orderNumber, createdAt,
+                      totalCents) — not the old Medusa display_id/total. */}
+                  <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>Order {o.orderNumber}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{new Date(o.createdAt).toLocaleDateString()} · {(o.items || []).reduce((t, it) => t + (it.quantity || 0), 0)} item(s)</div>
                 </div>
-                <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{money(o.total)}</span>
+                <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{formatCents(o.totalCents, o.currency)}</span>
               </div>
             ))
           )}
