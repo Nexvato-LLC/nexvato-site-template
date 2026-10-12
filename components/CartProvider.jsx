@@ -28,6 +28,8 @@ export default function CartProvider({ children }) {
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [cart, setCart] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
+  // Why the last add didn't land, shown in the drawer (support #142). Cleared on success.
+  const [cartNotice, setCartNotice] = useState(null);
   const busy = useRef(false);
 
   // Load catalog once.
@@ -81,11 +83,17 @@ export default function CartProvider({ children }) {
     try {
       const c = await ensureCart();
       setCart(await addToCart(c.id, item.variantId, qty));
+      setCartNotice(null);
       setCartOpen(true);
     } catch (e) {
       // OUT_OF_STOCK is a real, expected answer: the engine refuses to reserve
-      // units it does not have rather than overselling.
-      if (e?.code === 'OUT_OF_STOCK') setCartOpen(true);
+      // units it does not have rather than overselling. Units held in other
+      // shoppers' unfinished carts count as taken, so say so instead of failing
+      // silently (support #142).
+      setCartNotice(e?.code === 'OUT_OF_STOCK' || e?.status === 409
+        ? `Sorry, ${item.title || 'that item'} is out of stock right now. Please check back soon.`
+        : `We couldn't add ${item.title || 'that item'} to your cart. Please try again.`);
+      setCartOpen(true);
     } finally {
       busy.current = false;
     }
@@ -172,6 +180,7 @@ export default function CartProvider({ children }) {
     cart,
     cartId: cart?.id || null,
     cartOpen,
+    cartNotice,
     items,
     cartCount,
     subtotal,

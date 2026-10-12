@@ -30,7 +30,7 @@ function fireConfetti(host) {
 
 export default function CartDrawer() {
   const router = useRouter();
-  const { cartOpen, closeCart, items, cartCount, subtotal, shipMsg, shipPct, remaining, setQty, remove } = useCart();
+  const { cartOpen, closeCart, cartNotice, items, cartCount, subtotal, shipMsg, shipPct, remaining, setQty, remove } = useCart();
   const shipHostRef = useRef(null);
   const closeBtnRef = useRef(null);
   const prevRemaining = useRef(remaining);
@@ -88,6 +88,9 @@ export default function CartDrawer() {
         </div>
 
         <div style={{ flex: '1 1 auto', overflowY: 'auto', padding: '8px 22px' }}>
+          {cartNotice && (
+            <p role="alert" style={{ margin: '10px 0 4px', padding: '10px 12px', borderRadius: 4, background: 'var(--gray-100)', color: 'var(--ink)', fontSize: 14, lineHeight: 1.45 }}>{cartNotice}</p>
+          )}
           {items.length === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14, padding: '54px 12px' }}>
               <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--gray-100)', display: 'grid', placeItems: 'center', color: 'var(--gray-400)' }}>

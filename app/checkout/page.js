@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  updateCartDetails, createPaymentIntent, completeOrder,
+  updateCartDetails, applyDiscountCode, createPaymentIntent, completeOrder,
   retrieveCustomer, createCustomerAddress,
 } from '@/lib/shop';
 import { useCart } from '@/components/CartProvider';
@@ -65,6 +65,11 @@ export default function CheckoutPage() {
   // button stays the single primary action.
   const [clientSecret, setClientSecret] = useState('');
   const [payErr, setPayErr] = useState('');
+  // Discount code (support #143): the store's Discounts page promises codes
+  // "customers can enter at checkout", and this page had nowhere to enter one.
+  const [code, setCode] = useState('');
+  const [codeMsg, setCodeMsg] = useState(null); // { ok: boolean, text: string }
+  const [codeBusy, setCodeBusy] = useState(false);
   const confirmRef = useRef(null);
   const onStripeReady = useCallback((fn) => { confirmRef.current = fn; }, []);
   const sessionFor = useRef(null);
@@ -115,6 +120,7 @@ export default function CheckoutPage() {
   // than a client-side guess that could disagree with the actual charge.
   const shipping = (cart?.shippingCents ?? 0) / 100;
   const tax = (cart?.taxCents ?? 0) / 100;
+  const discount = (cart?.discountCents ?? 0) / 100;
   const total = cart?.totalCents != null ? cart.totalCents / 100 : subtotal + shipping + tax;
   const emailOk = EMAIL_RE.test(effectiveEmail || '');
   const valid = emailOk && isAddressComplete(chosenAddress) && !!optionId && items.length > 0;
@@ -147,6 +153,24 @@ export default function CheckoutPage() {
     });
     return (await refreshCart(cartId)) || cart;
   }, [cartId, cart, chosenAddress, effectiveEmail, optionId, refreshCart]);
+
+  const applyCode = async (event) => {
+    event.preventDefault();
+    const value = code.trim();
+    if (!cartId || !value || codeBusy) return;
+    setCodeBusy(true); setCodeMsg(null);
+    try {
+      const { discount } = await applyDiscountCode(cartId, value);
+      await refreshCart(cartId);
+      setCodeMsg(discount?.applied === false
+        ? { ok: false, text: discount.message || "That code can't be used on this order." }
+        : { ok: true, text: `Code ${value.toUpperCase()} applied.` });
+    } catch (e) {
+      setCodeMsg({ ok: false, text: e?.message || "That code couldn't be applied. Please try again." });
+    } finally {
+      setCodeBusy(false);
+    }
+  };
 
   // Create (or refresh) the Stripe payment session once the rest of the order is
   // valid. Re-runs whenever the TOTAL changes — switching shipping option changes
@@ -450,9 +474,17 @@ export default function CheckoutPage() {
           </div>
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 14, color: 'var(--text-body)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>{money(subtotal)}</span></div>
+            {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Discount{cart?.discountCode ? ` (${cart.discountCode})` : ''}</span><span>−{money(discount)}</span></div>}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Shipping</span><span>{shipping ? money(shipping) : '—'}</span></div>
+            {/* The total already includes tax; show it so the sum adds up (same fix as the dashboard store, #134). */}
+            {tax > 0 && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Tax</span><span>{money(tax)}</span></div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 17, color: 'var(--ink)', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 2 }}><span>Total</span><span>{money(total)}</span></div>
           </div>
+          <form onSubmit={applyCode} style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}><Input aria-label="Discount code" placeholder="Discount code" value={code} disabled={codeBusy || !!clientSecret} onChange={(e) => { setCode(e.target.value); setCodeMsg(null); }} /></div>
+            <Button variant="secondary" size="md" type="submit" disabled={codeBusy || !code.trim() || !!clientSecret}>{codeBusy ? 'Applying…' : 'Apply'}</Button>
+          </form>
+          {codeMsg && <p role="status" style={{ margin: '6px 0 0', fontSize: 13, color: codeMsg.ok ? 'var(--text-body)' : 'var(--danger)' }}>{codeMsg.text}</p>}
           {error && <p style={{ margin: '14px 0 0', color: 'var(--danger)', fontSize: 13.5 }}>{error}</p>}
           <div style={{ marginTop: 16 }}>
             <Button variant="primary" size="lg" fullWidth arrow={!processing} disabled={!valid || processing} onClick={placeOrder}>

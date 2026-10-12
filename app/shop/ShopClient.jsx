@@ -123,9 +123,24 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
     flipRef.current = null;
   }, [filterCat, filterBrand, priceKey, minRating, sort, visible]);
 
+  // --- URL → state: the header search pushes /shop?q=… while this page is already
+  // mounted, so the useState seeds above never see it. Follow the server's new
+  // props when they differ (support #151); after our own URL sync they match.
+  // Values this page wrote to the URL itself are skipped: a slow server re-render of
+  // "ab" must not overwrite "abc" that was typed meanwhile.
+  const pushedUrls = useRef(new Set());
+  const urlKey = (cat, brand, q) => `${cat ?? ''}|${brand ?? ''}|${q ?? ''}`;
+  useEffect(() => {
+    if (pushedUrls.current.has(urlKey(initialCat, initialBrand, initialQ))) return;
+    setSearchQ(initialQ ?? '');
+    setFilterCat(initialCat);
+    setFilterBrand(initialBrand);
+  }, [initialCat, initialBrand, initialQ]);
+
   // --- URL sync (cat/brand/q — what the server seeds from) ---
   useEffect(() => {
     if (firstUrl.current) { firstUrl.current = false; return; }
+    pushedUrls.current.add(urlKey(filterCat, filterBrand, searchQ));
     const qs = new URLSearchParams();
     if (filterCat) qs.set('cat', filterCat);
     if (filterBrand) qs.set('brand', filterBrand);
