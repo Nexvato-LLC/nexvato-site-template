@@ -37,6 +37,12 @@ export default function Input({
         flexDirection: 'column',
         gap: 6,
         width: '100%',
+        // ⚠️ minWidth:0 is what lets a field SHRINK inside a grid or flex row.
+        // Without it the wrapper's min-content width is the <input>'s intrinsic
+        // size (~20 characters), so two fields in a "1fr 1fr" row pushed the
+        // second past the card edge (support #218) and the Apply button out of
+        // the order summary on phones (#216).
+        minWidth: 0,
         ...style
       }}
     >
@@ -61,6 +67,7 @@ export default function Input({
           alignItems: 'center',
           gap: 10,
           height: h,
+          minWidth: 0,
           padding: '0 14px',
           background: disabled ? 'var(--gray-100)' : 'var(--white)',
           border: `1px solid ${invalid ? 'var(--brand-red)' : focus ? 'var(--brand-royal)' : 'var(--border-strong)'}`,
@@ -91,6 +98,7 @@ export default function Input({
           onBlur={() => setFocus(false)}
           style={{
             flex: 1,
+            width: '100%',
             border: 'none',
             outline: 'none',
             background: 'transparent',

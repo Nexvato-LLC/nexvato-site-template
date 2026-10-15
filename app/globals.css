@@ -1,4 +1,14 @@
 html, body { margin: 0; padding: 0; background: #ffffff; color: #16181d; font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif; }
+/* Media never outgrows its container. An <img> with a fixed height and width:auto
+   (the footer logo, at 84px high) was 392px wide on a 390px phone and dragged the
+   whole page sideways (support #216). */
+img, video { max-width: 100%; }
+/* Last-resort net for the HORIZONTAL axis only: the causes of sideways scroll are
+   fixed at their source (footer logo, closed cart drawer, form fields that would
+   not shrink), and this keeps any future one from reintroducing a sideways scroll.
+   `clip`, not `hidden`: `hidden` turns html/body into scroll containers and
+   breaks the sticky header. */
+html, body { overflow-x: clip; }
 a { color: #2e3192; }
 a:hover { color: #24276f; }
 ::selection { background: #dcdcf0; }

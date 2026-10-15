@@ -8,70 +8,88 @@ import CartDrawer from "@/components/CartDrawer";
 import RouteWipe from "@/components/RouteWipe";
 import AuthProvider from "@/components/AuthProvider";
 import ContentProvider from "@/components/ContentProvider";
-import { BRAND } from "@/lib/brand";
+import ShopConfigProvider from "@/components/ShopConfigProvider";
+import WishlistProvider from "@/components/WishlistProvider";
+import { resolveBrand } from "@/lib/brand";
+import { IS_CONNECTED, fetchShopConfig } from "@/lib/shop";
 import SetupNotice from "@/components/SetupNotice";
 import { HAS_COMMERCE } from "@/lib/site-mode";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
-export const metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: {
-    default: `${BRAND.name} — ${BRAND.tagline}`,
-    template: `%s · ${BRAND.name}`,
-  },
-  description: BRAND.description,
-  alternates: { canonical: "/" },
-  openGraph: {
-    type: "website",
-    siteName: BRAND.name,
-    url: "/",
-    title: `${BRAND.name} — ${BRAND.tagline}`,
-    description: BRAND.shortDescription,
-    images: ["/assets/graphic-hero.svg"],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: BRAND.name,
-    description: BRAND.shortDescription,
-  },
-};
+/**
+ * The shop's real identity, read on the SERVER so the HTML title, social
+ * previews and structured data carry the right name on first byte — not
+ * "Your Brand" until JavaScript runs (support #220). Revalidated every minute.
+ */
+async function loadBrand() {
+  const config = await fetchShopConfig();
+  return { config, brand: resolveBrand(config, IS_CONNECTED) };
+}
+
+export async function generateMetadata() {
+  const { brand } = await loadBrand();
+  const full = brand.tagline ? `${brand.name} — ${brand.tagline}` : brand.name;
+  return {
+    metadataBase: new URL(SITE_URL),
+    title: { default: full, template: `%s · ${brand.name}` },
+    description: brand.description,
+    alternates: { canonical: "/" },
+    openGraph: {
+      type: "website",
+      siteName: brand.name,
+      url: "/",
+      title: full,
+      description: brand.shortDescription,
+      images: [brand.logoUrl || "/assets/graphic-hero.svg"],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: brand.name,
+      description: brand.shortDescription,
+    },
+  };
+}
 
 // Structured data so search engines understand who this business is. Built
-// from BRAND, so it can never drift from what the pages actually say.
-const ORG_JSONLD = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "@id": `${SITE_URL}/#org`,
-      name: BRAND.name,
-      url: SITE_URL,
-      logo: `${SITE_URL}/assets/logo.svg`,
-    },
-    {
-      "@type": "WebSite",
-      "@id": `${SITE_URL}/#site`,
-      url: SITE_URL,
-      name: BRAND.name,
-      publisher: { "@id": `${SITE_URL}/#org` },
-      // Only advertise site search when there is a store to search. On a
-      // brochure site /shop is a 404, and telling search engines otherwise
-      // invites them to crawl a dead endpoint.
-      ...(HAS_COMMERCE
-        ? {
-            potentialAction: {
-              "@type": "SearchAction",
-              target: `${SITE_URL}/shop?q={search_term_string}`,
-              "query-input": "required name=search_term_string",
-            },
-          }
-        : {}),
-    },
-  ],
-};
+// from the resolved brand, so it can never drift from what the pages say.
+function orgJsonLd(brand) {
+  const logo = brand.logoUrl || (brand.logoPath ? `${SITE_URL}${brand.logoPath}` : undefined);
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${SITE_URL}/#org`,
+        name: brand.name,
+        url: SITE_URL,
+        ...(logo ? { logo } : {}),
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_URL}/#site`,
+        url: SITE_URL,
+        name: brand.name,
+        publisher: { "@id": `${SITE_URL}/#org` },
+        // Only advertise site search when there is a store to search. On a
+        // brochure site /shop is a 404, and telling search engines otherwise
+        // invites them to crawl a dead endpoint.
+        ...(HAS_COMMERCE
+          ? {
+              potentialAction: {
+                "@type": "SearchAction",
+                target: `${SITE_URL}/shop?q={search_term_string}`,
+                "query-input": "required name=search_term_string",
+              },
+            }
+          : {}),
+      },
+    ],
+  };
+}
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const { config, brand } = await loadBrand();
   return (
     <html lang="en">
       <head>
@@ -83,18 +101,22 @@ export default function RootLayout({ children }) {
         <Script src="/storefront/motion.js" strategy="beforeInteractive" />
       </head>
       <body>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_JSONLD) }} />
-        <ContentProvider>
-          <CartProvider>
-            <AuthProvider>
-              <SetupNotice />
-          <Header />
-              <main>{children}</main>
-              <Footer />
-              {HAS_COMMERCE && <CartDrawer />}
-            </AuthProvider>
-          </CartProvider>
-        </ContentProvider>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd(brand)) }} />
+        <ShopConfigProvider initialConfig={config}>
+          <ContentProvider>
+            <CartProvider>
+              <AuthProvider>
+                <WishlistProvider>
+                  <SetupNotice />
+                  <Header />
+                  <main>{children}</main>
+                  <Footer />
+                  {HAS_COMMERCE && <CartDrawer />}
+                </WishlistProvider>
+              </AuthProvider>
+            </CartProvider>
+          </ContentProvider>
+        </ShopConfigProvider>
         <RouteWipe />
       </body>
     </html>

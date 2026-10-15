@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/components/CartProvider';
+import { useWishlist } from '@/components/WishlistProvider';
 import { useSiteContent } from '@/components/ContentProvider';
 import useStorefrontMotion from '@/lib/useStorefrontMotion';
 import Eyebrow from '@/components/ds/Eyebrow';
@@ -33,9 +34,10 @@ export default function Home() {
   useStorefrontMotion();
   const router = useRouter();
   const { catalog, add } = useCart();
+  const { has: isWished, toggle: toggleWish } = useWishlist();
   const { home, promos } = useSiteContent();
 
-  // Curated via Medusa collections, with graceful fallbacks.
+  // Curated by category slug, with graceful fallbacks.
   const featured = (() => {
     const c = catalog.filter((p) => p.collection === 'featured');
     return c.length ? c : catalog.filter((p) => !p.collectible).slice(0, 4);
@@ -90,7 +92,7 @@ export default function Home() {
           <div data-rise><SectionHeading eyebrow={home.featured?.eyebrow} title={home.featured?.title} subtitle={home.featured?.subtitle} /></div>
           <div data-grid style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(250px,1fr))', gap: 20, marginTop: 32 }}>
             {featured.map((p) => (
-              <ProductCard key={p.id} brand={p.brand} title={p.title} image={p.image} price={p.price} compareAt={p.compareAt} badge={p.badge} badgeVariant={p.badgeVariant} onClick={() => openProduct(p.id)} onQuickAdd={() => add(p.id, 1)} />
+              <ProductCard key={p.id} brand={p.brand} title={p.title} image={p.image} price={p.price} compareAt={p.compareAt} badge={p.badge} badgeVariant={p.badgeVariant} wishlisted={isWished(p.productId)} onWishlist={() => toggleWish(p.productId)} onClick={() => openProduct(p.id)} onQuickAdd={() => add(p.id, 1)} />
             ))}
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 36 }}>
@@ -105,7 +107,7 @@ export default function Home() {
           <div data-rise><SectionHeading eyebrow={home.collectibles?.eyebrow} title={home.collectibles?.title} subtitle={home.collectibles?.subtitle} /></div>
           <div data-grid style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 20, marginTop: 32 }}>
             {collectibles.map((p) => (
-              <ProductCard key={p.id} brand={p.brand} title={p.title} image={p.image} price={p.price} compareAt={p.compareAt} badge={p.badge} badgeVariant={p.badgeVariant} onClick={() => openProduct(p.id)} onQuickAdd={() => add(p.id, 1)} />
+              <ProductCard key={p.id} brand={p.brand} title={p.title} image={p.image} price={p.price} compareAt={p.compareAt} badge={p.badge} badgeVariant={p.badgeVariant} wishlisted={isWished(p.productId)} onWishlist={() => toggleWish(p.productId)} onClick={() => openProduct(p.id)} onQuickAdd={() => add(p.id, 1)} />
             ))}
           </div>
         </div>

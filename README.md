@@ -10,11 +10,11 @@ with clean history. Push to `main` and it deploys.
 
 | File | What's in it |
 |---|---|
-| `lib/brand.js` | **Start here.** Business name, tagline, description. Feeds the page title, social previews, structured data, header and footer. |
+| `lib/brand.js` | **Start here.** Business name, tagline, description. Feeds the page title, social previews, structured data, header and footer. On a connected store the shop's own name and logo (from the Nexvato dashboard) take over. |
 | `lib/content.js` | All homepage and footer copy — headlines, CTAs, the about band, navigation links. |
 | `lib/data.js` | The brand/category filter lists shown on `/shop`. Empty by default. |
 | `styles/ds/tokens/colors.css` | The whole palette. Semantic names (`--brand-royal`, `--surface-navy`) stay put; change the primitives at the top and the entire site re-themes. |
-| `public/assets/` | Logo, hero, promo and about imagery. Ships as neutral SVG placeholders — replace them. |
+| `public/assets/` | Hero, promo and about imagery. Ships as neutral SVG placeholders — replace them. The logo is a text wordmark unless the shop has an uploaded logo or you set `BRAND.logo` in `lib/brand.js`. |
 
 Nothing is hardcoded to a brand. Editing those five gets you a distinct site
 without touching a component.
@@ -30,12 +30,19 @@ These are injected automatically when the site is provisioned:
 | `NEXT_PUBLIC_SHOP_ID` | which store this site sells |
 | `NEXT_PUBLIC_SHOP_API_URL` | the Nexvato commerce API |
 | `NEXT_PUBLIC_SITE_URL` | the public URL (canonicals + sitemap) |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | checkout key (publishable — not a secret) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | optional fallback only — checkout reads the live key from the shop at runtime |
 
 ⚠️ **Only `NEXT_PUBLIC_*` values are ever injected, and every one of them is
 public.** They ship inside the browser bundle. Never put a secret in this repo
 and never expect the platform to hand you one — anything sensitive belongs
 behind the API, not in a site anyone can view-source.
+
+**The shop's name, logo, Stripe key and payment status are read at runtime**
+from `GET {SHOP_API}/{SHOP_ID}`, not baked into the build. Checkout therefore
+works on a site where `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` was never set, and it
+says plainly "This store isn't taking online orders yet" while the merchant has
+not connected payments. The name and logo come from the shop too, so
+`lib/brand.js` is only the fallback for a site with no shop connected.
 
 If `NEXT_PUBLIC_SHOP_ID` is missing, the site renders a red banner saying so.
 That is deliberate: a site with no shop id builds fine, deploys fine, returns
@@ -73,7 +80,8 @@ still has services to describe; a brochure site still runs promotions.
 - `/shop` with category + brand filters, price and rating facets
 - Product detail pages with variants and add-to-cart
 - Slide-out cart, full checkout with Stripe, order confirmation
-- Customer accounts: register, sign in, order history, saved addresses
+- Customer accounts: register, sign in, order history, saved addresses, wishlist (`/wishlist`), guest order lookup (`/orders/lookup`)
+- Collections: `/shop/collections/<slug>` and `/shop?collection=<slug>`, with a chip row on `/shop`
 - `sitemap.xml`, `robots.txt`, canonical URLs, Open Graph and structured data
 - A design system in `components/ds/` — buttons, inputs, badges, price tags, product cards
 

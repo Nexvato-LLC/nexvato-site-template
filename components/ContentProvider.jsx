@@ -1,24 +1,21 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { DEFAULTS, fetchSiteContent } from '@/lib/content';
+import { createContext, useContext, useMemo } from 'react';
+import { DEFAULTS, buildSiteContent } from '@/lib/content';
+import { IS_CONNECTED } from '@/lib/shop';
+import { useShopConfig } from '@/components/ShopConfigProvider';
 
 const ContentContext = createContext(DEFAULTS);
 
 /**
- * Site-wide managed content (homepage + global chrome), fetched once from the
- * Medusa content API. Starts with DEFAULTS so first paint + SSR match today's
- * site, then hydrates with whatever the merchant has set. Never blocks render.
+ * Site-wide managed content (homepage + global chrome).
+ *
+ * Built synchronously from DEFAULTS plus the shop's published website copy, so
+ * first paint, SSR and hydration all agree — there is no fetch-then-flash.
  */
 export default function ContentProvider({ children }) {
-  const [content, setContent] = useState(DEFAULTS);
-
-  useEffect(() => {
-    let alive = true;
-    fetchSiteContent().then((c) => { if (alive) setContent(c); });
-    return () => { alive = false; };
-  }, []);
-
+  const { config } = useShopConfig();
+  const content = useMemo(() => buildSiteContent(config, IS_CONNECTED), [config]);
   return <ContentContext.Provider value={content}>{children}</ContentContext.Provider>;
 }
 

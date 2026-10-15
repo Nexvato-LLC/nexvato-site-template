@@ -9,7 +9,9 @@ import { useCart } from '@/components/CartProvider';
 import { HAS_COMMERCE } from '@/lib/site-mode';
 import { useAuth } from '@/components/AuthProvider';
 import { useSiteContent } from '@/components/ContentProvider';
-import { BRAND } from "@/lib/brand";
+import { useBrand } from '@/components/ShopConfigProvider';
+import { useWishlist } from '@/components/WishlistProvider';
+import BrandMark from '@/components/BrandMark';
 
 /* Ported from the source utility bar + <header id="site-header"> (SOURCE
    lines ~35-66) and the navItems built in renderVals() (lines ~699-712). */
@@ -66,6 +68,8 @@ export default function Header() {
   const { cartCount, openCart } = useCart();
   const { customer } = useAuth();
   const { home } = useSiteContent();
+  const brand = useBrand();
+  const { count: wishCount } = useWishlist();
   const [q, setQ] = useState('');
 
   const headerRef = useRef(null);
@@ -80,7 +84,8 @@ export default function Header() {
   // lazy-correct trade for a server-rendered header. Restore via useSearchParams
   // + a Suspense boundary if the precise highlight ever matters.
   const homeActive = pathname === '/';
-  const shopActive = pathname === '/shop';
+  const shopActive = pathname === '/shop' || pathname.startsWith('/shop/');
+  const wishActive = pathname === '/wishlist';
   const collectiblesActive = false;
 
   useEffect(() => {
@@ -176,14 +181,8 @@ export default function Header() {
             flexWrap: 'wrap',
           }}
         >
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <img
-              id="site-logo"
-              ref={logoRef}
-              src="/assets/logo-transparent.svg"
-              alt={BRAND.name}
-              style={{ height: 60, width: 'auto', transformOrigin: 'left center', display: 'block' }}
-            />
+          <Link href="/" aria-label={`${brand.name} home`} style={{ display: 'flex', alignItems: 'center', minWidth: 0, maxWidth: '100%', textDecoration: 'none' }}>
+            <BrandMark brand={brand} height={52} id="site-logo" imgRef={logoRef} />
           </Link>
 
           <nav style={{ display: 'flex', gap: '12px 24px', flex: '1 1 auto', flexWrap: 'wrap', minWidth: 0 }}>
@@ -229,7 +228,13 @@ export default function Header() {
             )}
             {HAS_COMMERCE && (
             <>
-            <IconButton aria-label="Wishlist" variant="ghost">
+            <IconButton
+              aria-label={wishCount ? `Wishlist, ${wishCount} saved` : 'Wishlist'}
+              variant="ghost"
+              badge={wishCount || undefined}
+              onClick={() => router.push('/wishlist')}
+              style={wishActive ? { color: 'var(--brand-royal)' } : undefined}
+            >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 20s-7-4.4-9.2-9C1.3 8 2.8 5 6 5c2 0 3.2 1.2 4 2.4C10.8 6.2 12 5 14 5c3.2 0 4.7 3 3.2 6-2.2 4.6-9.2 9-9.2 9Z"></path>
               </svg>

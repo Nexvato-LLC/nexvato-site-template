@@ -69,9 +69,12 @@ export default function ProductCard({
     if (onWishlist) onWishlist();
     else setWishLocal((v) => !v);
   };
-  const handleQuickAdd = (e) => {
+  const handleQuickAdd = async (e) => {
     e.stopPropagation();
-    onQuickAdd?.();
+    // Only celebrate if it actually landed: a refused add (out of stock) used to
+    // flash "Added ✓" while the cart notice said the opposite.
+    const result = await onQuickAdd?.();
+    if (result && result.ok === false) return;
     setAdded(true);
     if (addTimer.current) clearTimeout(addTimer.current);
     addTimer.current = setTimeout(() => setAdded(false), 1300);

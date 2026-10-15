@@ -30,7 +30,7 @@ function fireConfetti(host) {
 
 export default function CartDrawer() {
   const router = useRouter();
-  const { cartOpen, closeCart, cartNotice, items, cartCount, subtotal, shipMsg, shipPct, remaining, setQty, remove } = useCart();
+  const { cartOpen, closeCart, cartNotice, items, cartCount, subtotal, hasShipGoal, shipMsg, shipPct, remaining, setQty, remove } = useCart();
   const shipHostRef = useRef(null);
   const closeBtnRef = useRef(null);
   const prevRemaining = useRef(remaining);
@@ -51,23 +51,32 @@ export default function CartDrawer() {
     return () => { clearTimeout(t); document.removeEventListener('keydown', onKey); };
   }, [cartOpen, closeCart]);
 
-  const unlocked = remaining === 0 && items.length > 0;
+  const unlocked = hasShipGoal && remaining === 0 && items.length > 0;
   useEffect(() => {
-    if (prevRemaining.current > 0 && remaining === 0 && items.length > 0) {
+    if (hasShipGoal && prevRemaining.current > 0 && remaining === 0 && items.length > 0) {
       const reduced =
         window.matchMedia('(prefers-reduced-motion: reduce)').matches || window.__JAYS_FORCE_REDUCED === true;
       if (!reduced) fireConfetti(shipHostRef.current);
     }
     prevRemaining.current = remaining;
-  }, [remaining, items.length]);
+  }, [remaining, items.length, hasShipGoal]);
+
+  // The API has told us the most this line can be raised to.
+  const atLimit = (it) => typeof it.maxQty === 'number' && it.qty >= it.maxQty;
 
   const goCheckout = () => { closeCart(); router.push('/checkout'); };
   const goShop = () => { closeCart(); router.push('/shop'); };
 
   return (
-    <>
-      <div id="site-cart-scrim" onClick={closeCart} style={{ position: 'fixed', inset: 0, background: 'rgba(16,35,61,0.55)', opacity: 0, pointerEvents: 'none', zIndex: 60 }} />
-      <aside id="site-cart-panel" role="dialog" aria-modal="true" aria-label="Shopping cart" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '90vw', background: 'var(--white)', boxShadow: 'var(--shadow-lg)', transform: 'translateX(103%)', zIndex: 61, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    // ⚠️ THE CLOSED DRAWER MUST NOT TAKE UP ROOM IN THE PAGE. It slides off-screen
+    // with a transform, but a transformed box still counts toward the width the
+    // browser thinks the page has — on phones that made every page scroll sideways
+    // and cut the header and hero off (support #216). So the whole drawer lives in
+    // a fixed, overflow-clipped, click-through layer, and the closed panel is also
+    // visibility:hidden (delayed until the slide-out ends) so it cannot be tabbed to.
+    <div aria-hidden={!cartOpen} style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 60 }}>
+      <div id="site-cart-scrim" onClick={closeCart} style={{ position: 'absolute', inset: 0, background: 'rgba(16,35,61,0.55)', opacity: 0, pointerEvents: 'none' }} />
+      <aside id="site-cart-panel" role="dialog" aria-modal="true" aria-label="Shopping cart" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '90vw', background: 'var(--white)', boxShadow: 'var(--shadow-lg)', transform: 'translateX(103%)', display: 'flex', flexDirection: 'column', overflow: 'hidden', pointerEvents: 'auto', visibility: cartOpen ? 'visible' : 'hidden', transition: cartOpen ? 'visibility 0s' : 'visibility 0s linear 0.45s' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 22px', borderBottom: '1px solid var(--border)' }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, textTransform: 'uppercase', color: 'var(--ink)' }}>Your Cart ({cartCount})</span>
           <button ref={closeBtnRef} onClick={closeCart} aria-label="Close cart" className="site-removebtn" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-strong)', padding: 10 }}>
@@ -75,6 +84,7 @@ export default function CartDrawer() {
           </button>
         </div>
 
+        {hasShipGoal && (
         <div ref={shipHostRef} style={{ position: 'relative', padding: '16px 22px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
             <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: unlocked ? 'var(--gold-600)' : 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'color var(--dur-normal)' }}>
@@ -86,10 +96,11 @@ export default function CartDrawer() {
             <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.36s ease-out, background 0.36s', width: `${shipPct}%`, background: unlocked ? 'var(--gold-500)' : 'var(--brand-royal)' }} />
           </div>
         </div>
+        )}
 
         <div style={{ flex: '1 1 auto', overflowY: 'auto', padding: '8px 22px' }}>
           {cartNotice && (
-            <p role="alert" style={{ margin: '10px 0 4px', padding: '10px 12px', borderRadius: 4, background: 'var(--gray-100)', color: 'var(--ink)', fontSize: 14, lineHeight: 1.45 }}>{cartNotice}</p>
+            <p role="alert" style={{ margin: '10px 0 4px', padding: '10px 12px', borderRadius: 4, background: 'var(--gray-100)', borderLeft: '3px solid var(--brand-red)', color: 'var(--ink)', fontSize: 14, lineHeight: 1.45 }}>{cartNotice}</p>
           )}
           {items.length === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14, padding: '54px 12px' }}>
@@ -97,8 +108,8 @@ export default function CartDrawer() {
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" /></svg>
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, textTransform: 'uppercase', color: 'var(--ink)' }}>Your cart is empty</div>
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', maxWidth: 240, lineHeight: 1.6 }}>Add some all-American gear and it&rsquo;ll show up right here.</p>
-              <Button variant="primary" arrow onClick={goShop}>Shop the Collection</Button>
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', maxWidth: 240, lineHeight: 1.6 }}>Add something and it&rsquo;ll show up right here.</p>
+              <Button variant="primary" arrow onClick={goShop}>Start Shopping</Button>
             </div>
           )}
           {items.map((it) => (
@@ -106,14 +117,14 @@ export default function CartDrawer() {
               <div role="img" aria-label={it.title} style={{ width: 68, height: 68, borderRadius: 4, flexShrink: 0, backgroundSize: 'cover', backgroundPosition: 'center', backgroundImage: `url("${it.image || ''}")` }} />
               <div style={{ flex: '1 1 auto', minWidth: 0 }}>
                 <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{it.brand}</div>
-                <div style={{ fontWeight: 700, fontSize: 13.5, lineHeight: 1.3, color: 'var(--text-strong)', margin: '2px 0 6px' }}>{it.title}</div>
+                <div style={{ fontWeight: 700, fontSize: 13.5, lineHeight: 1.3, color: 'var(--text-strong)', margin: '2px 0 6px', overflowWrap: 'anywhere' }}>{it.title}{it.variantName ? <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> — {it.variantName}</span> : null}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border-strong)', borderRadius: 2 }}>
                     <button onClick={() => setQty(it.id, -1)} aria-label="Decrease quantity" className="site-qtybtn" style={{ width: 40, height: 40, background: 'none', border: 'none', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 12h14" /></svg>
                     </button>
                     <span style={{ width: 40, textAlign: 'center', fontWeight: 700, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{it.qty}</span>
-                    <button onClick={() => setQty(it.id, 1)} aria-label="Increase quantity" className="site-qtybtn" style={{ width: 40, height: 40, background: 'none', border: 'none', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}>
+                    <button onClick={() => setQty(it.id, 1)} disabled={atLimit(it)} aria-label={atLimit(it) ? `Increase quantity (maximum ${it.maxQty} reached)` : 'Increase quantity'} title={atLimit(it) ? `Only ${it.maxQty} available` : undefined} className="site-qtybtn" style={{ width: 40, height: 40, background: 'none', border: 'none', cursor: atLimit(it) ? 'not-allowed' : 'pointer', opacity: atLimit(it) ? 0.35 : 1, display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                     </button>
                   </div>
@@ -139,6 +150,6 @@ export default function CartDrawer() {
           </div>
         )}
       </aside>
-    </>
+    </div>
   );
 }

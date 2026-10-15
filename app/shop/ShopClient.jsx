@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { JAYS_DATA } from '@/lib/data';
 import { useCart } from '@/components/CartProvider';
+import { useWishlist } from '@/components/WishlistProvider';
 import useStorefrontMotion from '@/lib/useStorefrontMotion';
 import Eyebrow from '@/components/ds/Eyebrow';
 import Button from '@/components/ds/Button';
@@ -19,28 +21,33 @@ const PRICE_BUCKETS = [
   { key: '50-100', label: '$50 – $100', test: (p) => p.price >= 50 && p.price < 100 },
   { key: '100', label: '$100 & up', test: (p) => p.price >= 100 },
 ];
-const RATINGS = [
-  { key: 0, label: 'Any rating' },
-  { key: 4, label: '4.0 & up' },
-  { key: 4.5, label: '4.5 & up' },
-];
 const SORTS = [
   { key: 'featured', label: 'Featured' },
   { key: 'price-asc', label: 'Price: Low to High' },
   { key: 'price-desc', label: 'Price: High to Low' },
-  { key: 'rated', label: 'Top Rated' },
 ];
 
-export default function ShopClient({ initialCat = null, initialBrand = null, initialQ = '' }) {
+export default function ShopClient({
+  initialCat = null, initialBrand = null, initialQ = '',
+  // Collections (support #225): the shop's active collections, and — when the URL
+  // names one (/shop?collection=slug) — which collection that is and which
+  // product IDs belong to it. Membership is resolved on the server, so the URL is
+  // shareable and an unknown collection is a real 404.
+  collections = [], activeCollection = null, collectionProductIds = null,
+  // Where this grid lives: /shop, or a collection's own address. Filter changes
+  // rewrite the query string but must stay on the page they started from.
+  basePath = '/shop',
+}) {
   useStorefrontMotion();
   const router = useRouter();
   const { catalog, catalogLoading, add } = useCart();
+  const { has: isWished, toggle: toggleWish } = useWishlist();
+  const inCollection = useMemo(() => (collectionProductIds ? new Set(collectionProductIds) : null), [collectionProductIds]);
 
   const [filterCat, setFilterCat] = useState(initialCat);
   const [filterBrand, setFilterBrand] = useState(initialBrand);
   const [searchQ, setSearchQ] = useState(initialQ);
   const [priceKey, setPriceKey] = useState('any');
-  const [minRating, setMinRating] = useState(0);
   const [sort, setSort] = useState('featured');
   const [view, setView] = useState('grid');
   const [visible, setVisible] = useState(9);
@@ -55,7 +62,7 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
   const bucket = PRICE_BUCKETS.find((b) => b.key === priceKey) || PRICE_BUCKETS[0];
   const passSearch = (p) => !searchQ || (p.title + ' ' + p.brand + ' ' + p.cat).toLowerCase().includes(searchQ.toLowerCase());
   const passPrice = (p) => bucket.test(p);
-  const passRating = (p) => (p.rating || 0) >= minRating;
+  const passCollection = (p) => !inCollection || inCollection.has(p.productId);
 
   // --- final list ---
   const items = useMemo(() => {
@@ -63,36 +70,35 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
       (p) =>
         passSearch(p) &&
         passPrice(p) &&
-        passRating(p) &&
+        passCollection(p) &&
         (!filterCat || p.cat === filterCat) &&
         (!filterBrand || p.brand === filterBrand)
     );
     if (sort === 'price-asc') list = [...list].sort((a, b) => a.price - b.price);
     else if (sort === 'price-desc') list = [...list].sort((a, b) => b.price - a.price);
-    else if (sort === 'rated') list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalog, searchQ, priceKey, minRating, filterCat, filterBrand, sort]);
+  }, [catalog, searchQ, priceKey, filterCat, filterBrand, sort, inCollection]);
   const shown = items.slice(0, visible);
 
   // --- contextual facet counts (apply every OTHER facet) ---
   const catCounts = useMemo(() => {
     const m = {};
     JAYS_DATA.categories.forEach((c) => {
-      m[c] = catalog.filter((p) => passSearch(p) && passPrice(p) && passRating(p) && (!filterBrand || p.brand === filterBrand) && p.cat === c).length;
+      m[c] = catalog.filter((p) => passSearch(p) && passPrice(p) && passCollection(p) && (!filterBrand || p.brand === filterBrand) && p.cat === c).length;
     });
-    m.__all = catalog.filter((p) => passSearch(p) && passPrice(p) && passRating(p) && (!filterBrand || p.brand === filterBrand)).length;
+    m.__all = catalog.filter((p) => passSearch(p) && passPrice(p) && passCollection(p) && (!filterBrand || p.brand === filterBrand)).length;
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalog, searchQ, priceKey, minRating, filterBrand]);
+  }, [catalog, searchQ, priceKey, filterBrand, inCollection]);
   const brandCounts = useMemo(() => {
     const m = {};
     JAYS_DATA.brands.forEach((b) => {
-      m[b] = catalog.filter((p) => passSearch(p) && passPrice(p) && passRating(p) && (!filterCat || p.cat === filterCat) && p.brand === b).length;
+      m[b] = catalog.filter((p) => passSearch(p) && passPrice(p) && passCollection(p) && (!filterCat || p.cat === filterCat) && p.brand === b).length;
     });
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalog, searchQ, priceKey, minRating, filterCat]);
+  }, [catalog, searchQ, priceKey, filterCat, inCollection]);
 
   // --- GSAP Flip: capture before a discrete change, animate after render ---
   const reduced = () =>
@@ -121,7 +127,7 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
       onLeave: (els) => window.gsap && window.gsap.to(els, { opacity: 0, scale: 0.85, duration: 0.25 }),
     });
     flipRef.current = null;
-  }, [filterCat, filterBrand, priceKey, minRating, sort, visible]);
+  }, [filterCat, filterBrand, priceKey, sort, visible]);
 
   // --- URL → state: the header search pushes /shop?q=… while this page is already
   // mounted, so the useState seeds above never see it. Follow the server's new
@@ -145,9 +151,11 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
     if (filterCat) qs.set('cat', filterCat);
     if (filterBrand) qs.set('brand', filterBrand);
     if (searchQ) qs.set('q', searchQ);
+    // On /shop the collection travels in the query; on its own address it IS the path.
+    if (activeCollection && basePath === '/shop') qs.set('collection', activeCollection.slug);
     const str = qs.toString();
-    router.replace(str ? `/shop?${str}` : '/shop', { scroll: false });
-  }, [filterCat, filterBrand, searchQ, router]);
+    router.replace(str ? `${basePath}?${str}` : basePath, { scroll: false });
+  }, [filterCat, filterBrand, searchQ, router, activeCollection, basePath]);
 
   // --- close the sort popover on outside click / escape ---
   useEffect(() => {
@@ -162,15 +170,13 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
   const setCat = (c) => withFlip(() => { setFilterCat((v) => (v === c ? null : c)); setVisible(9); });
   const setBrand = (b) => withFlip(() => { setFilterBrand((v) => (v === b ? null : b)); setVisible(9); });
   const setPrice = (k) => withFlip(() => { setPriceKey(k); setVisible(9); });
-  const setRating = (r) => withFlip(() => { setMinRating(r); setVisible(9); });
   const pickSort = (k) => { captureFlip(); setSort(k); setSortOpen(false); };
-  const clearAll = withFlip(() => { setFilterCat(null); setFilterBrand(null); setSearchQ(''); setPriceKey('any'); setMinRating(0); setVisible(9); });
+  const clearAll = withFlip(() => { setFilterCat(null); setFilterBrand(null); setSearchQ(''); setPriceKey('any'); setVisible(9); });
 
   const activeChips = [];
   if (filterCat) activeChips.push({ label: filterCat, onRemove: setCat(filterCat) });
   if (filterBrand) activeChips.push({ label: filterBrand, onRemove: setBrand(filterBrand) });
   if (priceKey !== 'any') activeChips.push({ label: bucket.label, onRemove: setPrice('any') });
-  if (minRating) activeChips.push({ label: `${minRating}★ & up`, onRemove: setRating(0) });
   if (searchQ) activeChips.push({ label: `“${searchQ}”`, onRemove: () => setSearchQ('') });
 
   const sortLabel = (SORTS.find((s) => s.key === sort) || SORTS[0]).label;
@@ -183,11 +189,17 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
         <div style={{ position: 'relative', maxWidth: 'var(--container)', margin: '0 auto', padding: '52px 24px' }}>
           <div data-rise><Eyebrow color="onDark" rule>Shop</Eyebrow></div>
           <h1 data-split style={{ margin: '10px 0 0', fontFamily: 'var(--font-display)', fontSize: 'clamp(38px,5vw,58px)', textTransform: 'uppercase', lineHeight: 0.98, color: 'var(--white)' }}>
-            The Collection
+            {activeCollection ? activeCollection.name : 'The Collection'}
           </h1>
+          {activeCollection?.description && (
+            <p data-rise style={{ margin: '12px 0 0', maxWidth: 640, fontSize: 15, lineHeight: 1.6, color: 'var(--text-on-dark-muted)' }}>{activeCollection.description}</p>
+          )}
           <p data-rise style={{ margin: '12px 0 0', fontSize: 14, color: 'var(--text-on-dark-muted)' }}>
             <a href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} style={{ color: 'var(--gold-400)', textDecoration: 'none' }}>Home</a>
-            <span style={{ padding: '0 8px' }}>/</span>Collection
+            <span style={{ padding: '0 8px' }}>/</span>
+            {activeCollection ? (
+              <><a href="/shop" onClick={(e) => { e.preventDefault(); router.push('/shop'); }} style={{ color: 'var(--gold-400)', textDecoration: 'none' }}>Shop</a><span style={{ padding: '0 8px' }}>/</span>{activeCollection.name}</>
+            ) : 'Shop'}
           </p>
         </div>
       </div>
@@ -212,15 +224,19 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
               <FacetRow key={b.key} label={b.label} on={priceKey === b.key} onClick={setPrice(b.key)} radio />
             ))}
           </FacetGroup>
-          <FacetGroup title="Rating">
-            {RATINGS.map((r) => (
-              <FacetRow key={r.key} label={r.label} on={minRating === r.key} onClick={setRating(r.key)} radio />
-            ))}
-          </FacetGroup>
         </aside>
 
         {/* GRID COLUMN */}
         <div style={{ flex: '1 1 560px', minWidth: 0 }}>
+          {collections.length > 0 && (
+            <nav aria-label="Collections" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
+              <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginRight: 4 }}>Collections</span>
+              <CollectionChip href="/shop" on={!activeCollection}>All</CollectionChip>
+              {collections.map((c) => (
+                <CollectionChip key={c.id} href={`/shop/collections/${c.slug}`} on={activeCollection?.slug === c.slug}>{c.name}</CollectionChip>
+              ))}
+            </nav>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
             <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>
               Showing <strong style={{ color: 'var(--text-strong)' }}>{shown.length}</strong> of {items.length} products
@@ -278,8 +294,14 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
 
           {!catalogLoading && items.length === 0 && (
             <div style={{ padding: '70px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 15 }}>
-              No products match those filters.{' '}
-              <button onClick={clearAll} style={{ background: 'none', border: 'none', color: 'var(--brand-royal)', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>Clear filters</button>
+              {inCollection && inCollection.size === 0 ? (
+                <>There are no products in this collection yet. <Link href="/shop" style={{ color: 'var(--brand-royal)', fontWeight: 700 }}>Browse the whole shop</Link></>
+              ) : (
+                <>
+                  No products match those filters.{' '}
+                  <button onClick={clearAll} style={{ background: 'none', border: 'none', color: 'var(--brand-royal)', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>Clear filters</button>
+                </>
+              )}
             </div>
           )}
 
@@ -302,6 +324,8 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
                   compareAt={p.compareAt}
                   badge={p.badge}
                   badgeVariant={p.badgeVariant}
+                  wishlisted={isWished(p.productId)}
+                  onWishlist={() => toggleWish(p.productId)}
                   onClick={() => router.push('/product/' + p.id)}
                   onQuickAdd={() => add(p.id, 1)}
                 />
@@ -327,6 +351,21 @@ export default function ShopClient({ initialCat = null, initialBrand = null, ini
 }
 
 /* ---------- rail sub-components ---------- */
+
+function CollectionChip({ href, on, children }) {
+  return (
+    <Link
+      href={href}
+      aria-current={on ? 'page' : undefined}
+      style={{
+        display: 'inline-block', padding: '7px 14px', borderRadius: 'var(--radius-md)', textDecoration: 'none',
+        fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12.5, letterSpacing: '0.06em', textTransform: 'uppercase',
+        background: on ? 'var(--brand-navy)' : 'var(--white)', color: on ? '#fff' : 'var(--text-body)',
+        border: `1px solid ${on ? 'var(--brand-navy)' : 'var(--border-strong)'}`,
+      }}
+    >{children}</Link>
+  );
+}
 
 function SearchBox({ value, onChange }) {
   return (

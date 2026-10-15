@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { productArt } from '@/lib/data';
 import { useCart } from '@/components/CartProvider';
+import { useWishlist } from '@/components/WishlistProvider';
+import { useShopConfig } from '@/components/ShopConfigProvider';
+import { fetchProductReviews } from '@/lib/shop';
 import useStorefrontMotion from '@/lib/useStorefrontMotion';
 import Eyebrow from '@/components/ds/Eyebrow';
 import PriceTag from '@/components/ds/PriceTag';
@@ -11,54 +13,45 @@ import Button from '@/components/ds/Button';
 import ProductCard from '@/components/ds/ProductCard';
 import ReviewsSection, { Stars } from '@/components/ReviewsSection';
 
-const FINISHES = [
-  { label: 'Signature', tone: null },
-  { label: 'Field', tone: '#17324f' },
-  { label: 'Midnight', tone: '#0f1c30' },
-];
-const SIZE_GUIDE = [
-  ['S', 'Chest 34–36"'],
-  ['M', 'Chest 38–40"'],
-  ['L', 'Chest 42–44"'],
-  ['XL', 'Chest 46–48"'],
-];
-const TABS = ['Details', 'Specifications', 'Shipping & Returns'];
+// Nothing on the product payload says how many units are in stock (the API
+// deliberately does not expose stock counters), so the stepper has a sane
+// ceiling instead. If an add is refused because stock is short, the API says how
+// many ARE left and the ceiling drops to that (support #228).
+const MAX_QTY = 99;
 
-export default function ProductClient({ initial }) {
+const money = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+
+export default function ProductClient({ initial, initialReviews = null }) {
   useStorefrontMotion();
   const { id } = useParams();
   const router = useRouter();
   const { catalog, catalogLoading, add } = useCart();
+  const { has: isWished, toggle: toggleWish } = useWishlist();
+  const { config } = useShopConfig();
 
   // Prefer the live catalog once it loads; fall back to the server-rendered product.
   const cur = catalog.find((p) => p.id === id) || initial || {};
 
-  const [finish, setFinish] = useState(0);
   const [qty, setQty] = useState(1);
-  const [selectedSize, setSelectedSize] = useState(null);
-  const [showGuide, setShowGuide] = useState(false);
+  const [variantIdx, setVariantIdx] = useState(0);
+  const [qtyMax, setQtyMax] = useState(MAX_QTY);
+  const [addMsg, setAddMsg] = useState('');
   const [tab, setTab] = useState(0);
   const [added, setAdded] = useState(false);
-  const [wished, setWished] = useState(false);
+  const [reviews, setReviews] = useState(initialReviews);
   const [showBar, setShowBar] = useState(false);
-  const stageRef = useRef(null);
   const atcRef = useRef(null);
   const addTimer = useRef(null);
 
-  useEffect(() => {
-    setFinish(0); setQty(1); setSelectedSize(null); setTab(0);
-    return () => { if (addTimer.current) clearTimeout(addTimer.current); };
-  }, [id]);
+  useEffect(() => () => { if (addTimer.current) clearTimeout(addTimer.current); }, []);
 
-  const stageTone = FINISHES[finish].tone || cur.tone;
-  const stageImage = productArt({ ...cur, tone: stageTone });
-
+  // The server hands over the first page of reviews; if that fetch failed, try once more here.
   useEffect(() => {
-    const el = stageRef.current;
-    if (el && window.gsap && window.SiteMotion && !window.SiteMotion.reduced()) {
-      window.gsap.fromTo(el, { opacity: 0.2 }, { opacity: 1, duration: 0.32, ease: 'power2.out' });
-    }
-  }, [finish]);
+    if (reviews || !cur.productId) return undefined;
+    let alive = true;
+    fetchProductReviews(cur.productId).then((r) => { if (alive && r) setReviews(r); });
+    return () => { alive = false; };
+  }, [reviews, cur.productId]);
 
   useEffect(() => {
     const el = atcRef.current;
@@ -68,20 +61,62 @@ export default function ProductClient({ initial }) {
     return () => io.disconnect();
   }, [id]);
 
-  const hasSizes = cur.cat === 'Apparel' || cur.cat === 'Headwear';
-  const saveAmt = cur.compareAt && cur.compareAt > cur.price ? cur.compareAt - cur.price : 0;
-  const savePct = saveAmt ? Math.round((1 - cur.price / cur.compareAt) * 100) : 0;
-  const specs = cur.specs && cur.specs.length ? cur.specs : [['Brand', cur.brand], ['Category', cur.cat]];
+  // Real choices only. A product with a single variant has nothing to choose, so
+  // no selector is drawn — the SIGNATURE / FIELD / MIDNIGHT and S/M/L/XL buttons
+  // that used to appear on every product did nothing at all (support #213).
+  const variants = cur.variants || [];
+  const hasChoice = variants.length > 1;
+  const variant = variants[hasChoice ? variantIdx : 0] || {};
+  const price = hasChoice ? variant.price : cur.price;
+  const compareAt = hasChoice ? variant.compareAt : cur.compareAt;
+  const inStock = hasChoice ? variant.inStock !== false : cur.inStock !== false;
+  const saveAmt = compareAt && compareAt > price ? compareAt - price : 0;
+  const savePct = saveAmt ? Math.round((1 - price / compareAt) * 100) : 0;
 
-  const doAdd = () => {
-    add(cur.id, qty);
+  // Specifications: only rows that have a value, and no tab at all if none do.
+  const specRows = (cur.specs && cur.specs.length ? cur.specs : [['Brand', cur.brand], ['Category', cur.cat]])
+    .filter((row) => Array.isArray(row) && row[0] && String(row[1] ?? '').trim());
+
+  // Shipping facts come from the SHOP's own settings, never from copy typed into this
+  // file. The old tab promised "30-day returns", a "2-year quality guarantee" and
+  // shipping "from Springfield, USA" for every store.
+  const shipFacts = [];
+  if (config?.freeShippingThreshold) shipFacts.push(`Free U.S. shipping on orders over $${money(config.freeShippingThreshold)}.`);
+  if (config?.flatShipping) shipFacts.push(`Standard shipping is $${money(config.flatShipping)}.`);
+  if (config?.shipsFrom?.city && config?.shipsFrom?.state) shipFacts.push(`Ships from ${config.shipsFrom.city}, ${config.shipsFrom.state}.`);
+  if (config?.supportEmail) shipFacts.push(`Questions about an order? Email ${config.supportEmail}.`);
+
+  const tabs = [
+    cur.blurb && { key: 'details', label: 'Details' },
+    specRows.length > 0 && { key: 'specs', label: 'Specifications' },
+    shipFacts.length > 0 && { key: 'shipping', label: 'Shipping' },
+  ].filter(Boolean);
+  const activeTab = tabs[Math.min(tab, tabs.length - 1)]?.key;
+
+  const doAdd = async () => {
+    setAddMsg('');
+    const result = await add(cur.id, qty, hasChoice ? variant.id : cur.variantId);
+    if (result?.busy) return;
+    if (result && result.ok === false) {
+      // Short on stock: lower the stepper to what the API says is left so the
+      // shopper can simply press Add again. "Out of stock" only when it is 0.
+      if (typeof result.available === 'number' && result.available > 0) {
+        setQtyMax(result.available);
+        setQty(Math.min(qty, result.available));
+        setAddMsg(`Only ${result.available} left in stock — we’ve set your quantity to ${Math.min(qty, result.available)}.`);
+      } else if (result.available === 0) {
+        setAddMsg('Sorry, this item is out of stock right now.');
+      }
+      return;
+    }
+    setQtyMax(MAX_QTY);
     setAdded(true);
     if (addTimer.current) clearTimeout(addTimer.current);
     addTimer.current = setTimeout(() => setAdded(false), 1400);
   };
 
-  const recs = catalog.filter((x) => x.id !== cur.id && x.cat === cur.cat)
-    .concat(catalog.filter((x) => x.id !== cur.id && x.cat !== cur.cat))
+  const recs = (cur.cat ? catalog.filter((x) => x.id !== cur.id && x.cat === cur.cat) : [])
+    .concat(catalog.filter((x) => x.id !== cur.id && (!cur.cat || x.cat !== cur.cat)))
     .slice(0, 4);
 
   if (!cur.id) {
@@ -92,6 +127,9 @@ export default function ProductClient({ initial }) {
     );
   }
 
+  const heart = isWished(cur.productId);
+  const stepBtn = { height: 52, background: 'var(--white)', border: 'none', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' };
+
   return (
     <div data-screen-label="Product">
       {/* Breadcrumb */}
@@ -100,8 +138,12 @@ export default function ProductClient({ initial }) {
           <a href="/" onClick={(e) => { e.preventDefault(); router.push('/'); }} style={{ color: 'var(--link)', textDecoration: 'none' }}>Home</a>
           <span style={{ padding: '0 6px' }}>/</span>
           <a href="/shop" onClick={(e) => { e.preventDefault(); router.push('/shop'); }} style={{ color: 'var(--link)', textDecoration: 'none' }}>Shop</a>
-          <span style={{ padding: '0 6px' }}>/</span>
-          <a href={'/shop?cat=' + encodeURIComponent(cur.cat || '')} onClick={(e) => { e.preventDefault(); router.push('/shop?cat=' + encodeURIComponent(cur.cat || '')); }} style={{ color: 'var(--link)', textDecoration: 'none' }}>{cur.cat}</a>
+          {cur.cat && (
+            <>
+              <span style={{ padding: '0 6px' }}>/</span>
+              <a href={'/shop?cat=' + encodeURIComponent(cur.cat)} onClick={(e) => { e.preventDefault(); router.push('/shop?cat=' + encodeURIComponent(cur.cat)); }} style={{ color: 'var(--link)', textDecoration: 'none' }}>{cur.cat}</a>
+            </>
+          )}
           <span style={{ padding: '0 6px' }}>/</span>
           <span style={{ color: 'var(--text-strong)' }}>{cur.title}</span>
         </div>
@@ -110,7 +152,7 @@ export default function ProductClient({ initial }) {
       {/* Main: media + buy box */}
       <div style={{ maxWidth: 'var(--container)', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(420px,100%),1fr))', gap: 56, padding: '40px 24px 64px', alignItems: 'start' }}>
         {/* MEDIA — rectangular specimen plate */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 5', maxWidth: 560, margin: '0 auto', background: 'var(--cream-50)', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', boxShadow: 'var(--shadow-md)' }}>
             {cur.badge && (
               <span style={{ position: 'absolute', top: 16, left: 16, zIndex: 3 }}>
@@ -119,176 +161,157 @@ export default function ProductClient({ initial }) {
             )}
             <div
               id="pdp-stage-img"
-              ref={stageRef}
               role="img"
               aria-label={cur.title}
-              style={{ position: 'absolute', inset: '7%', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', backgroundImage: `url("${stageImage}")` }}
+              style={{ position: 'absolute', inset: '7%', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', backgroundImage: `url("${cur.image}")` }}
             />
             {cur.collectible && (
               <canvas data-fx="viewer" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, transition: 'opacity 0.5s ease-out', touchAction: 'none' }} />
             )}
           </div>
 
-          {/* caption / finish chips */}
-          {cur.collectible ? (
+          {cur.collectible && (
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 3v5h-5" /></svg>
               Drag to rotate · 360° view
             </span>
-          ) : (
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-              {FINISHES.map((f, i) => (
-                <button
-                  key={f.label}
-                  onClick={() => setFinish(i)}
-                  aria-pressed={finish === i}
-                  style={{ padding: '7px 14px', cursor: 'pointer', borderRadius: 'var(--radius-md)', background: finish === i ? 'var(--brand-navy)' : 'var(--white)', color: finish === i ? '#fff' : 'var(--text-body)', border: `1px solid ${finish === i ? 'var(--brand-navy)' : 'var(--border-strong)'}`, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', transition: 'background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast)' }}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
           )}
         </div>
 
         {/* BUY BOX (sticky) */}
-        <div style={{ position: 'sticky', top: 100, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'sticky', top: 100, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Eyebrow color="royal">{cur.brand}</Eyebrow>
-            <h1 data-split style={{ margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 'clamp(28px,3.4vw,40px)', lineHeight: 1.08, letterSpacing: '-0.005em', color: 'var(--ink)' }}>{cur.title}</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Stars value={cur.rating || 0} size={17} />
-              <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>{(cur.rating || 0).toFixed(1)}</span>
-              <a href="#reviews" onClick={(e) => { e.preventDefault(); document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ fontSize: 13, color: 'var(--link)', textDecoration: 'none' }}>
-                (<span data-count={cur.reviews || 0}>0</span> reviews)
-              </a>
-            </div>
+            {cur.brand && <Eyebrow color="royal">{cur.brand}</Eyebrow>}
+            <h1 data-split style={{ margin: 0, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 'clamp(28px,3.4vw,40px)', lineHeight: 1.08, letterSpacing: '-0.005em', color: 'var(--ink)', overflowWrap: 'anywhere' }}>{cur.title}</h1>
+            {/* Only when there ARE reviews. "0.0 (0 reviews)" next to empty stars is noise,
+                and a rating with no reviews behind it is a lie (support #213). */}
+            {reviews && reviews.total > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Stars value={reviews.average || 0} size={17} />
+                <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>{(reviews.average || 0).toFixed(1)}</span>
+                <a href="#reviews" onClick={(e) => { e.preventDefault(); document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ fontSize: 13, color: 'var(--link)', textDecoration: 'none' }}>
+                  ({reviews.total} {reviews.total === 1 ? 'review' : 'reviews'})
+                </a>
+              </div>
+            )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, margin: '18px 0', paddingTop: 18, borderTop: '1px solid var(--border)' }}>
-            <PriceTag price={cur.price || 0} compareAt={cur.compareAt} size="lg" />
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, margin: '18px 0', paddingTop: 18, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+            <PriceTag price={price || 0} compareAt={compareAt} size="lg" />
             {saveAmt > 0 && (
               <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 13, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--price-sale)' }}>Save ${saveAmt.toFixed(0)} (−{savePct}%)</span>
             )}
           </div>
 
-          <p style={{ margin: 0, fontSize: 16, lineHeight: 1.7, color: 'var(--text-body)', maxWidth: '52ch' }}>{cur.blurb || cur.title}</p>
+          {cur.blurb && <p style={{ margin: 0, fontSize: 16, lineHeight: 1.7, color: 'var(--text-body)', maxWidth: '52ch', overflowWrap: 'anywhere' }}>{cur.blurb}</p>}
 
-          {hasSizes && (
-            <fieldset style={{ border: 'none', padding: 0, margin: '20px 0 0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <legend style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-strong)', padding: 0 }}>Size</legend>
-                <button type="button" onClick={() => setShowGuide((v) => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5, color: 'var(--link)', textDecoration: 'underline' }}>Size guide</button>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {['S', 'M', 'L', 'XL'].map((sz) => (
-                  <button key={sz} onClick={() => setSelectedSize(sz)} aria-pressed={selectedSize === sz} style={{ width: 48, height: 44, cursor: 'pointer', borderRadius: 'var(--radius-md)', background: selectedSize === sz ? 'var(--brand-navy)' : 'var(--white)', color: selectedSize === sz ? '#fff' : 'var(--text-strong)', border: `1px solid ${selectedSize === sz ? 'var(--brand-navy)' : 'var(--border-strong)'}`, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, transition: 'background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast)' }}>{sz}</button>
+          {hasChoice && (
+            <fieldset style={{ border: 'none', padding: 0, margin: '20px 0 0', minWidth: 0 }}>
+              <legend style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-strong)', padding: 0, marginBottom: 8 }}>Option</legend>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {variants.map((v, i) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => { setVariantIdx(i); setAddMsg(''); }}
+                    aria-pressed={variantIdx === i}
+                    disabled={v.inStock === false}
+                    title={v.inStock === false ? 'Out of stock' : undefined}
+                    style={{ minWidth: 48, minHeight: 44, padding: '0 16px', cursor: v.inStock === false ? 'not-allowed' : 'pointer', borderRadius: 'var(--radius-md)', background: variantIdx === i ? 'var(--brand-navy)' : 'var(--white)', color: variantIdx === i ? '#fff' : 'var(--text-strong)', border: `1px solid ${variantIdx === i ? 'var(--brand-navy)' : 'var(--border-strong)'}`, opacity: v.inStock === false ? 0.45 : 1, textDecoration: v.inStock === false ? 'line-through' : 'none', fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14 }}
+                  >{v.name || `Option ${i + 1}`}</button>
                 ))}
               </div>
-              {showGuide && (
-                <div style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                  {SIZE_GUIDE.map(([sz, m], i) => (
-                    <div key={sz} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 14px', fontSize: 13, color: 'var(--text-body)', background: i % 2 ? 'var(--gray-100)' : 'var(--white)' }}>
-                      <span style={{ fontWeight: 700 }}>{sz}</span><span>{m}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </fieldset>
           )}
 
           <div ref={atcRef} style={{ display: 'flex', gap: 12, alignItems: 'stretch', marginTop: 20, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-              <button onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Decrease quantity" className="site-qtybtn" style={{ width: 44, height: 52, background: 'var(--white)', border: 'none', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}>
+              <button onClick={() => setQty((q) => Math.max(1, q - 1))} disabled={qty <= 1} aria-label="Decrease quantity" className="site-qtybtn" style={{ ...stepBtn, width: 44, opacity: qty <= 1 ? 0.4 : 1 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 12h14" /></svg>
               </button>
               <span style={{ width: 46, textAlign: 'center', fontWeight: 700, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{qty}</span>
-              <button onClick={() => setQty((q) => q + 1)} aria-label="Increase quantity" className="site-qtybtn" style={{ width: 44, height: 52, background: 'var(--white)', border: 'none', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--text-strong)' }}>
+              <button onClick={() => setQty((q) => Math.min(qtyMax, q + 1))} disabled={qty >= qtyMax} aria-label="Increase quantity" title={qty >= qtyMax ? `Maximum ${qtyMax}` : undefined} className="site-qtybtn" style={{ ...stepBtn, width: 44, opacity: qty >= qtyMax ? 0.4 : 1, cursor: qty >= qtyMax ? 'not-allowed' : 'pointer' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
               </button>
             </div>
-            <span style={{ flex: '1 1 200px' }}>
-              <Button variant={added ? 'navy' : 'primary'} size="lg" fullWidth arrow={!added} onClick={doAdd}>{added ? 'Added ✓' : 'Add to Cart'}</Button>
+            <span style={{ flex: '1 1 200px', minWidth: 0 }}>
+              <Button variant={added ? 'navy' : 'primary'} size="lg" fullWidth arrow={!added && inStock} disabled={!inStock} onClick={doAdd}>{!inStock ? 'Out of Stock' : added ? 'Added ✓' : 'Add to Cart'}</Button>
             </span>
-            <button onClick={() => setWished((v) => !v)} aria-label={wished ? 'Remove from wishlist' : 'Add to wishlist'} aria-pressed={wished} style={{ width: 52, height: 52, flexShrink: 0, display: 'grid', placeItems: 'center', cursor: 'pointer', borderRadius: 'var(--radius-md)', background: 'var(--white)', border: '1px solid var(--border-strong)' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill={wished ? 'var(--brand-red)' : 'none'} stroke={wished ? 'var(--brand-red)' : 'var(--text-strong)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" /></svg>
+            <button onClick={() => toggleWish(cur.productId)} aria-label={heart ? 'Remove from wishlist' : 'Add to wishlist'} aria-pressed={heart} style={{ width: 52, height: 52, flexShrink: 0, display: 'grid', placeItems: 'center', cursor: 'pointer', borderRadius: 'var(--radius-md)', background: 'var(--white)', border: '1px solid var(--border-strong)' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={heart ? 'var(--brand-red)' : 'none'} stroke={heart ? 'var(--brand-red)' : 'var(--text-strong)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" /></svg>
             </button>
           </div>
+          {addMsg && <p role="alert" style={{ margin: '12px 0 0', fontSize: 13.5, lineHeight: 1.5, color: 'var(--danger)' }}>{addMsg}</p>}
 
-          {/* trust strip */}
-          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-            {[
-              ['M2 6h11v10H2zM13 9h4l3 3v4h-7z', 'Free U.S. shipping over $75'],
-              ['M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z', '2-year quality guarantee'],
-              ['M12 2 14.9 8.3 21.8 9l-5.1 4.7 1.4 6.8L12 17.8 6 20.5l1.4-6.8L2.3 9l6.9-.7Z', 'Trusted seller'],
-            ].map(([d, label]) => (
-              <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-body)' }}>
+          {/* trust strip — only what the shop's own settings say */}
+          {config?.freeShippingThreshold ? (
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-body)' }}>
                 <span style={{ color: 'var(--brand-royal)', display: 'inline-flex' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M2 6h11v10H2zM13 9h4l3 3v4h-7z" /></svg>
                 </span>
-                {label}
+                Free U.S. shipping over ${money(config.freeShippingThreshold)}
               </span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Tabs — only the ones with something real to say */}
+      {tabs.length > 0 && (
+        <div style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px 56px' }}>
+          <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+            {tabs.map((t, i) => (
+              <button key={t.key} onClick={() => setTab(i)} aria-selected={activeTab === t.key} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '12px 6px', marginBottom: -1, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, letterSpacing: '0.06em', textTransform: 'uppercase', color: activeTab === t.key ? 'var(--ink)' : 'var(--text-muted)', borderBottom: `2px solid ${activeTab === t.key ? 'var(--brand-royal)' : 'transparent'}` }}>{t.label}</button>
             ))}
           </div>
+          <div style={{ padding: '24px 0', maxWidth: 720 }}>
+            {activeTab === 'details' && (
+              <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.8, color: 'var(--text-body)', overflowWrap: 'anywhere', whiteSpace: 'pre-line' }}>{cur.blurb}</p>
+            )}
+            {activeTab === 'specs' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 0 }}>
+                {specRows.map(([label, value]) => (
+                  <div key={label} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,160px) minmax(0,1fr)', gap: 16, padding: '12px 0', borderBottom: '1px solid var(--border)', fontSize: 14 }}>
+                    <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{label}</span>
+                    <span style={{ color: 'var(--text-body)', overflowWrap: 'anywhere' }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {activeTab === 'shipping' && (
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 15, lineHeight: 1.9, color: 'var(--text-body)' }}>
+                {shipFacts.map((f) => <li key={f}>{f}</li>)}
+              </ul>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Tabs: Details / Specifications / Shipping */}
-      <div style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px 56px' }}>
-        <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
-          {TABS.map((t, i) => (
-            <button key={t} onClick={() => setTab(i)} aria-selected={tab === i} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '12px 6px', marginBottom: -1, fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 14, letterSpacing: '0.06em', textTransform: 'uppercase', color: tab === i ? 'var(--ink)' : 'var(--text-muted)', borderBottom: `2px solid ${tab === i ? 'var(--brand-royal)' : 'transparent'}` }}>{t}</button>
-          ))}
-        </div>
-        <div style={{ padding: '24px 0', maxWidth: 720 }}>
-          {tab === 0 && (
-            <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.8, color: 'var(--text-body)' }}>
-              {cur.blurb} {cur.collectible ? 'Each piece is individually inspected.' : 'Backed by our quality guarantee.'}
-            </p>
-          )}
-          {tab === 1 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 0 }}>
-              {specs.map(([label, value], i) => (
-                <div key={label} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 16, padding: '12px 0', borderBottom: '1px solid var(--border)', fontSize: 14 }}>
-                  <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{label}</span>
-                  <span style={{ color: 'var(--text-body)' }}>{value}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {tab === 2 && (
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 15, lineHeight: 1.9, color: 'var(--text-body)' }}>
-              <li>Free U.S. shipping on orders over $75.</li>
-              <li>Ships in 1–2 business days from Springfield, USA.</li>
-              <li>30-day returns on unused gear in original condition.</li>
-              <li>Backed by a 2-year quality guarantee.</li>
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* Reviews */}
-      <ReviewsSection product={cur} />
+      {/* Reviews — real ones only */}
+      <ReviewsSection key={reviews ? 'loaded' : 'pending'} productId={cur.productId} reviews={reviews} />
 
       {/* Recommendations */}
-      <section data-band style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px 80px' }}>
-        <h2 style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 20, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink)', margin: '0 0 20px' }}>More {cur.cat}</h2>
-        <div data-grid style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(250px,1fr))', gap: 20 }}>
-          {recs.map((r) => (
-            <ProductCard key={r.id} brand={r.brand} title={r.title} image={r.image} price={r.price} compareAt={r.compareAt} badge={r.badge} badgeVariant={r.badgeVariant} onClick={() => router.push('/product/' + r.id)} onQuickAdd={() => add(r.id, 1)} />
-          ))}
-        </div>
-      </section>
+      {recs.length > 0 && (
+        <section data-band style={{ maxWidth: 'var(--container)', margin: '0 auto', padding: '0 24px 80px' }}>
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 20, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink)', margin: '0 0 20px' }}>{cur.cat ? `More ${cur.cat}` : 'You may also like'}</h2>
+          <div data-grid style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(250px,100%),1fr))', gap: 20 }}>
+            {recs.map((r) => (
+              <ProductCard key={r.id} brand={r.brand} title={r.title} image={r.image} price={r.price} compareAt={r.compareAt} badge={r.badge} badgeVariant={r.badgeVariant} wishlisted={isWished(r.productId)} onWishlist={() => toggleWish(r.productId)} onClick={() => router.push('/product/' + r.id)} onQuickAdd={() => add(r.id, 1)} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Mobile sticky add-to-cart bar (hidden on desktop via .pdp-atc-bar) */}
       <div className="pdp-atc-bar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, transform: showBar ? 'translateY(0)' : 'translateY(110%)', transition: 'transform var(--dur-normal) var(--ease-out)', background: 'var(--white)', borderTop: '1px solid var(--border)', boxShadow: '0 -6px 20px rgba(16,35,61,0.12)', padding: '10px 16px calc(10px + env(safe-area-inset-bottom))' }}>
         <div style={{ maxWidth: 'var(--container)', margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ minWidth: 0, flex: '1 1 auto' }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.title}</div>
-            <PriceTag price={cur.price || 0} compareAt={cur.compareAt} size="sm" />
+            <PriceTag price={price || 0} compareAt={compareAt} size="sm" />
           </div>
           <span style={{ flex: '0 0 auto' }}>
-            <Button variant="primary" arrow onClick={doAdd}>Add to Cart</Button>
+            <Button variant="primary" arrow={inStock} disabled={!inStock} onClick={doAdd}>{inStock ? 'Add to Cart' : 'Sold Out'}</Button>
           </span>
         </div>
       </div>
