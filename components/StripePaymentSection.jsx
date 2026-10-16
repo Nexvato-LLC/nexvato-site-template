@@ -25,11 +25,20 @@ export const ENV_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KE
 
 // loadStripe must run once per key, outside render, or the SDK re-initializes
 // (and Stripe logs a warning on every call). A key can change at runtime — the
-// merchant moves from test to live — so this is a cache by key, not a singleton.
+// merchant moves from test to live — so this is a cache by key + account, not a
+// singleton.
+//
+// ⚠️ DIRECT CHARGES (2026-10-16): the payment is created ON the store's own
+// connected Stripe account, so Stripe.js must be initialised with that account
+// (`stripeAccount`). Without it the client secret belongs to an account the
+// platform-key instance cannot see, and confirmPayment fails.
 const stripeByKey = new Map();
-function stripeFor(key) {
-  if (!stripeByKey.has(key)) stripeByKey.set(key, loadStripe(key));
-  return stripeByKey.get(key);
+function stripeFor(key, stripeAccount) {
+  const cacheKey = `${key}:${stripeAccount || ''}`;
+  if (!stripeByKey.has(cacheKey)) {
+    stripeByKey.set(cacheKey, loadStripe(key, stripeAccount ? { stripeAccount } : undefined));
+  }
+  return stripeByKey.get(cacheKey);
 }
 
 /** Match the storefront's look so the embedded fields don't feel bolted on. */
@@ -69,8 +78,11 @@ function PaymentFields({ onReady }) {
   return <PaymentElement options={{ layout: 'tabs' }} />;
 }
 
-export default function StripePaymentSection({ publishableKey, clientSecret, onReady }) {
-  const stripePromise = useMemo(() => (publishableKey ? stripeFor(publishableKey) : null), [publishableKey]);
+export default function StripePaymentSection({ publishableKey, stripeAccount, clientSecret, onReady }) {
+  const stripePromise = useMemo(
+    () => (publishableKey ? stripeFor(publishableKey, stripeAccount) : null),
+    [publishableKey, stripeAccount],
+  );
   // Elements reads its options once; a stable object avoids "unsupported prop change" warnings.
   const options = useMemo(() => ({ clientSecret, appearance }), [clientSecret]);
   if (!stripePromise || !clientSecret) return null;

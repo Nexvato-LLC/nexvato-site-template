@@ -86,6 +86,9 @@ export default function CheckoutPage() {
   const [phase, setPhase] = useState('details'); // details | payment
   const [paymentCartId, setPaymentCartId] = useState(null);
   const [clientSecret, setClientSecret] = useState('');
+  // The account the PaymentIntent was created on (direct charges). The payment-intent
+  // response is authoritative; the shop config's value is the fallback.
+  const [paymentAccount, setPaymentAccount] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -351,6 +354,7 @@ export default function CheckoutPage() {
       // than show card fields that cannot charge.
       throw new Error('Card payment is temporarily unavailable. Please try again later.');
     }
+    setPaymentAccount(res.stripeAccountId || config?.stripeAccountId || '');
     setClientSecret(res.clientSecret);
     setPaymentCartId(c.id);
     setPhase('payment');
@@ -717,7 +721,7 @@ export default function CheckoutPage() {
               !clientSecret ? (
                 <div style={dashedBox}>Loading secure payment…</div>
               ) : (
-                <StripePaymentSection publishableKey={publishableKey} clientSecret={clientSecret} onReady={onStripeReady} />
+                <StripePaymentSection publishableKey={publishableKey} stripeAccount={paymentAccount || config?.stripeAccountId || ''} clientSecret={clientSecret} onReady={onStripeReady} />
               )
             ) : payState === 'loading' ? (
               <div style={dashedBox}>Checking payment options…</div>
