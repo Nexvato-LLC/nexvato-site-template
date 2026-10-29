@@ -19,13 +19,10 @@ import AddressForm, {
   EMPTY_ADDRESS, EMAIL_RE, toShippingAddress, isAddressComplete, oneLineAddress,
 } from '@/components/AddressForm';
 import StripePaymentSection, { ENV_PUBLISHABLE_KEY } from '@/components/StripePaymentSection';
+import { ORDER_EMAILS_ENABLED, ORDER_CONFIRMED_PATH, rememberConfirmedOrder } from '@/lib/order-confirmation';
 
 const money = (n) => '$' + Number(n || 0).toFixed(2);
 
-// Mirrors the backend's RESEND_API_KEY. Drives the confirmation copy so we never
-// promise a receipt the backend isn't configured to send. Keep the two in sync
-// (both are set together when provisioning an instance).
-const ORDER_EMAILS_ENABLED = process.env.NEXT_PUBLIC_ORDER_EMAILS === 'true';
 
 const lbl = { fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-strong)' };
 const fieldErr = { margin: 0, fontSize: 12.5, lineHeight: 1.4, color: 'var(--danger)' };
@@ -289,7 +286,11 @@ export default function CheckoutPage() {
     // Empty the cart this order came from — but not a NEW cart the shopper may
     // have started since (when finding an old order after a reload).
     if (!cartNow.current || cartNow.current.id === id || cartNow.current.status !== 'draft') clear();
-  }, [clear]);
+    // The confirmation lives at its own address so ad platforms can count a
+    // purchase by URL. replace(): Back from it must not land on a spent checkout.
+    rememberConfirmedOrder(o);
+    router.replace(ORDER_CONFIRMED_PATH);
+  }, [clear, router]);
 
   /**
    * Payment is confirmed at Stripe; turn it into an order.
@@ -495,27 +496,13 @@ export default function CheckoutPage() {
     } finally { setProcessing(false); }
   };
 
-  /* ---- Confirmation ---- */
+  /* ---- Confirmed: on its way to /order-confirmed ---- */
   if (order) {
     return (
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '72px 24px', textAlign: 'center' }}>
-        <div style={{ width: 82, height: 82, margin: '0 auto 20px', borderRadius: '50%', background: 'var(--brand-navy)', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow-md)' }}>
-          <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="var(--gold-400)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-        </div>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 'clamp(36px,5vw,56px)', textTransform: 'uppercase', color: 'var(--ink)' }}>Order Confirmed</h1>
-        <p style={{ margin: '14px 0 0', fontSize: 16, lineHeight: 1.7, color: 'var(--text-body)', overflowWrap: 'anywhere' }}>
-          {/* Only promise a receipt when order emails are actually configured
-              (backend RESEND_API_KEY + this flag). Claiming an email that no
-              system sends is the one thing this screen must never do. */}
-          Thank you! Your order <strong style={{ color: 'var(--brand-royal)' }}>#{order.display_id}</strong> is confirmed
-          {ORDER_EMAILS_ENABLED && order.email
-            ? <> and a receipt is on its way to <strong>{order.email}</strong>.</>
-            : <>. Please save this order number — keep it handy if you need to contact us about your order.</>}
+        <p role="status" style={{ margin: 0, fontSize: 16, lineHeight: 1.7, color: 'var(--text-body)' }}>
+          Your order <strong style={{ color: 'var(--brand-royal)' }}>#{order.display_id}</strong> is confirmed. <a href={ORDER_CONFIRMED_PATH} style={{ color: 'var(--link)' }}>View your confirmation</a>
         </p>
-        <div style={{ marginTop: 26, display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-          {customer && <Button variant="navy" size="lg" onClick={() => router.push('/account')}>View My Orders</Button>}
-          <Button variant="primary" size="lg" arrow onClick={() => router.push('/shop')}>Keep Shopping</Button>
-        </div>
       </div>
     );
   }

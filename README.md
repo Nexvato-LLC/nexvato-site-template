@@ -61,7 +61,7 @@ Nothing in this repo changes — the switch is the presence of
 |---|---|---|
 | Homepage | hero, services, about, promos, contact, newsletter | all of that **plus** product grids |
 | Header | Home / Services / About / Contact | Home / **Shop** / About, plus cart |
-| `/shop`, `/checkout`, `/account`, `/product` | **404** | live |
+| `/shop`, `/checkout`, `/order-confirmed`, `/account`, `/product` | **404** | live |
 | Cart drawer | not rendered | rendered |
 | Links into the store | rewritten to a safe anchor | followed |
 
@@ -79,7 +79,7 @@ still has services to describe; a brochure site still runs promotions.
 - Homepage with animated hero, featured products, promo cards, about band, newsletter
 - `/shop` with category + brand filters, price and rating facets
 - Product detail pages with variants and add-to-cart
-- Slide-out cart, full checkout with Stripe, order confirmation
+- Slide-out cart, full checkout with Stripe, and a thank-you page at `/order-confirmed` that every completed order lands on. Give that URL to Google Ads or Meta as the purchase conversion ("URL contains /order-confirmed").
 - Customer accounts: register, sign in, order history, saved addresses, wishlist (`/wishlist`), guest order lookup (`/orders/lookup`)
 - Collections: `/shop/collections/<slug>` and `/shop?collection=<slug>`, with a chip row on `/shop`
 - `sitemap.xml`, `robots.txt`, canonical URLs, Open Graph and structured data
