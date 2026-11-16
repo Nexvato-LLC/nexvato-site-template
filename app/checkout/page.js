@@ -19,6 +19,7 @@ import AddressForm, {
   EMPTY_ADDRESS, EMAIL_RE, toShippingAddress, isAddressComplete, oneLineAddress,
 } from '@/components/AddressForm';
 import StripePaymentSection, { ENV_PUBLISHABLE_KEY } from '@/components/StripePaymentSection';
+import { TEST_MODE_NOTICE } from '@/lib/test-mode';
 import { ORDER_EMAILS_ENABLED, ORDER_CONFIRMED_PATH, rememberConfirmedOrder } from '@/lib/order-confirmation';
 
 const money = (n) => '$' + Number(n || 0).toFixed(2);
@@ -26,6 +27,8 @@ const money = (n) => '$' + Number(n || 0).toFixed(2);
 
 const lbl = { fontFamily: 'var(--font-heading)', fontWeight: 600, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-strong)' };
 const fieldErr = { margin: 0, fontSize: 12.5, lineHeight: 1.4, color: 'var(--danger)' };
+// Support #240: plain, obvious, and the same amber the dashboard uses for test mode.
+const testModeBox = { margin: '0 0 28px', padding: '12px 16px', border: '1px solid var(--gold-400)', borderRadius: 'var(--radius-md)', background: 'var(--gold-100)', color: 'var(--gold-600)', fontSize: 14, fontWeight: 600, lineHeight: 1.5 };
 const dashedBox = { padding: '14px 16px', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6 };
 
 const CART_CHANGED = 'Your cart changed in another tab. Review the new total.';
@@ -126,6 +129,9 @@ export default function CheckoutPage() {
     ? (configLoading ? 'loading' : 'unavailable')
     : ((config.acceptingPayments ?? Boolean(publishableKey)) && publishableKey ? 'ready' : 'off');
   const supportLine = config?.supportEmail ? ` Questions? Email ${config.supportEmail}.` : '';
+  // Support #240: a store on Stripe test keys takes test cards only. The key
+  // Stripe.js is opened with is the final word, so a pk_test_ key counts too.
+  const testMode = payState === 'ready' && (config?.testMode === true || publishableKey.startsWith('pk_test_'));
 
   // --- money: the SERVER's numbers ---
   // The engine recomputes tax and shipping on every cart change, so the summary
@@ -588,6 +594,8 @@ export default function CheckoutPage() {
         <h1 style={{ margin: '10px 0 28px', fontFamily: 'var(--font-display)', fontSize: 'clamp(36px,4.6vw,54px)', textTransform: 'uppercase', color: 'var(--ink)' }}>Checkout</h1>
       </div>
 
+      {testMode && <div role="note" data-testid="test-mode-notice" style={testModeBox}>{TEST_MODE_NOTICE}</div>}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(340px,100%),1fr))', gap: 40, alignItems: 'start' }}>
         {/* Form */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 34, minWidth: 0 }}>
@@ -708,7 +716,10 @@ export default function CheckoutPage() {
               !clientSecret ? (
                 <div style={dashedBox}>Loading secure payment…</div>
               ) : (
+                <>
+                {testMode && <p role="note" style={{ margin: '0 0 12px', fontSize: 13.5, fontWeight: 600, color: 'var(--warning)' }}>{TEST_MODE_NOTICE}</p>}
                 <StripePaymentSection publishableKey={publishableKey} stripeAccount={paymentAccount || config?.stripeAccountId || ''} clientSecret={clientSecret} onReady={onStripeReady} />
+                </>
               )
             ) : payState === 'loading' ? (
               <div style={dashedBox}>Checking payment options…</div>
